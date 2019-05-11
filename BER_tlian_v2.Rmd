@@ -1,0 +1,316 @@
+---
+title: "BER_tlian_v2"
+author: "TXL"
+date: "5/5/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(data.table)
+library(lubridate)
+library(gridExtra)
+```
+
+# Player BER - Version 2
+ Recycles a lot of code from previous markdown file. Removed some data that were probably unneccessary to regression. 
+ 
+## BER Data Exploration
+ 
+# Note: I used another script ("BER_data_cleaner.R") to perform the preliminary data cleaning steps
+
+# Create Value Tables for different models
+## Skip all this code because it's already done and put into "2018dataClean_BER.csv"
+
+Load in 2018 data
+```{r, eval=FALSE}
+# Create column names to fit to CSV imports
+column_names = c("game_id", "visiting_team", "inning", "batting_team_raw",
+                 "outs", "balls", "strikes", "vis_score", "home_score",
+                 "res_batter", "res_batter_hand", "res_pitcher", "res_pitcher_hand",
+                 "1b_runner", "2b_runner", "3b_runner", "event_text",
+                 "leadoff_flag", "pinchhit_flag", "defensive_position", 
+                 "lineup_posiiton", "event_type", "batter_event_flag",
+                 "ab_flag", "hit_value", "SH_flag", "SF_flag", "outs_on_play",
+                 "RBI_on_play", "wild_pitch_flag", "passed_ball_flag",
+                 "num_errors", "batter_dest", "1b_dest", "2b_dest",
+                 "3b_dest", "position_before", "runs_scored", "position_after", 
+                 "runs_scored_EOI", "batting_team", "year", "date", "temperature",
+                 "stadium", "ABvsPitcher", "Rtot", "DefEff", 
+                 "1b_speed", "2b_speed", "3b_speed", "FIP", "park_factor")
+
+# Make sure you have the right file location on your computer.
+# 2018dataClean.csv
+dt = fread("/Users/txl/Google Drive/Sports Analytics/Final Data/2018dataClean.csv", 
+                 col.names =  column_names)
+
+
+# Make position_before and position_after factors
+dt$position_before = as.factor(dt$position_before)
+dt$position_after = as.factor(dt$position_after)
+dt$FIP = as.numeric(dt$FIP)
+
+```
+
+# Regressions
+
+```{r, eval = FALSE}
+# First order regression of runs_scored_EOI ~ position_before
+# Note I took out the intercept
+m1 = lm(runs_scored_EOI ~ position_before - 1 , 
+        data = dt)
+summary(m1)
+
+m2 = lm(runs_scored_EOI ~ position_before + FIP + park_factor + DefEff - 1, 
+        dat = dt)
+summary(m2)
+
+```
+
+## Value Created and Max Value Created Calculations
+
+I use the coefficients from our basic regression model above to calculate the expected value of each state. I also calculate the total possible runs and value created for each state. 
+
+```{r, eval=FALSE}
+
+# Create value table
+# To calculate the max possible value, I calculate the maximum number of runs possible with # of bases + 1 (for the batter) + the state left with the same number of outs and no one on base. 
+state = sort(unique(dt$position_before))
+ev_m1 = m1$coefficients
+ev_m2 = m2$coefficients
+
+value_table = data.table(state, ev_m1, ev_m2[1:24])
+
+max_possible = c()
+for (s in state) {
+  str = strsplit(as.character(s), split = "")[[1]]
+  # max number of runs (bases + batter)
+  max = as.integer(str[5]) + as.integer(str[7]) + as.integer(str[9]) + 1
+  # state of field after a home run
+  after = switch(as.integer(str[3])+1, "['0,0,0,0']", "['1,0,0,0']", "['2,0,0,0']")
+  # value of that state of field
+  after_value = value_table[state == as.factor(after)]$ev_m1
+  before_value = value_table[state == as.factor(s)]$ev_m1
+  # add max and after_value
+  max_possible = cbind(max_possible, max + after_value - before_value)
+}
+value_table[, max_m1 := as.vector(max_possible)]
+
+
+# Calculate a player's Efficiency as EV[position_after] + runs_scores / max (from table created above)
+
+calc_val_created = function(position_after, position_before, runs_scored) {
+  return(ifelse (position_after == as.factor("end inning"),
+                 runs_scored - value_table[state == position_before]$ev_m1,
+                 value_table[state == position_after]$ev_m1 + runs_scored -
+                   value_table[state == position_before]$ev_m1))
+}
+
+
+## Create a lists of value_created and max_value_created
+## WARNING: These take a very long time to run
+
+value_created = mapply(calc_val_created, dt$position_after, dt$position_before,
+                       dt$runs_scored, SIMPLIFY = T)
+
+max_value_created = sapply(dt$position_before, 
+                           function(pb) return(value_table[state == pb]$max))
+
+
+# Add value_created and max_value_created columns to our datclean datatable
+dt[, value_created := value_created][, max_value_created := max_value_created]
+
+# Calculate BER with value_created/max_value_created
+dt[, BER := value_created/max_value_created]
+
+# Export to csv to save running value_created again.
+dt %>% write.csv(file = "2018dataClean_BER.csv")
+
+```
+
+# Batter Efficiency Rating
+
+```{r}
+# Pull file
+dt = fread("2018dataClean_BER.csv")
+
+## To-Do here
+## Attempt to calculate BER for a given playerp
+
+player_names = fread("/Users/txl/Google Drive/Sports Analytics/Final Data/Dictionary for Player Names.csv", col.names = c("res_batter", "player_name"))[order(res_batter)]
+player_list = sort(unique(dt$res_batter))
+BER_mean_table = dt %>% group_by(res_batter) %>% summarize(BER_mean = mean(BER))
+RE24 = dt %>% group_by(res_batter) %>% summarize(RE24 = sum(value_created))
+PA_count_table = count(dt, res_batter)
+
+BER_table = data.table(res_batter = player_names[res_batter %in% player_list]$res_batter,
+                       player_names = player_names[res_batter %in% player_list]$player_name,
+                       BER_mean = BER_mean_table$BER_mean, 
+                       RE24,
+                       PA_count = PA_count_table$n)
+
+# Top 10 Player BERs with PA > 100
+head(BER_table[PA_count > 100][order(BER_mean, decreasing = T)][, -c("res_batter")], 10)
+# Bottom 10 
+head(BER_table[PA_count > 100][order(BER_mean, decreasing = F)][,-c("res_batter")], 10)
+
+
+# Top 10 Player BERs 
+head(BER_table[order(RE24, decreasing = T)][, -c("res_batter")], 10)
+# Bottom 10 
+head(BER_table[order(RE24, decreasing = F)][,-c("res_batter")], 10)
+
+# Histogram of AB_count
+ggplot(BER_table, aes(x=PA_count)) + 
+  geom_histogram(binwidth = 10) + 
+  ggtitle("Histogram of PA_count")
+
+
+# Histogram of BER 
+ggplot(BER_table, aes(x=BER_mean)) +
+  ggtitle("Histogram of BER_mean (All PA)") +
+  geom_histogram(binwidth = .005)
+
+# Histogram of BER for players with > 100 PA
+ggplot(BER_table[PA_count > 100], aes(x=BER_mean)) + 
+  ggtitle("Histogram of BER_mean (PA > 100)") + 
+  geom_histogram(binwidth = .005)
+
+ggplot(BER_table[PA_count > 500], aes(x=BER_mean)) + 
+  ggtitle("Histogram of BER_mean (PA > 500)") + 
+  geom_histogram(binwidth = .005)
+
+# Plot BER vs RE24 (no labels)
+ggplot(BER_table[,-c("res_batter")][PA_count >100], aes(x = BER_mean, y = RE24, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") +
+  ggtitle("RE24 vs BER (PA > 100)")
+
+# Plot BER vs RE24 (labels)
+ggplot(BER_table[,-c("res_batter")][PA_count >100], aes(x = BER_mean, y = RE24, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_text(aes(label = player_names)) +
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") + 
+  ggtitle("RE24 vs BER (PA > 100)")
+
+```
+
+
+
+# Graphs and Charts
+
+```{r}
+coef = data.table(state, ev = m1$coefficients)
+ggplot(coef, aes(x=state, y = ev)) + geom_bar(stat="identity") +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  xlab("") + ylab("Expected runs until EOI") +
+  ggtitle("Expected runs until End of Inning by State")
+
+
+
+```
+
+
+```{r}
+
+# Plot positions_before and positions_after
+# Counts
+summary(dt$position_before)
+qplot(as.factor(dt$position_before), geom="bar",
+      main = "Histogram of position_before") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  xlab("Position Before") + ylab("Counts")
+
+
+```
+
+## Transition matrix heatmap
+
+```{r}
+posns = sort(unique(dt$position_after))
+
+pa_totals = summary(dt$position_after)
+runs_totals = summary(as.factor(dt$runs_scored_EOI))
+
+pa_table = data.table(names(pa_totals), pa_totals)
+runs_table = data.table(runs = as.factor(0:11), runs_totals)
+
+for (p in posns[-length(posns)]) {
+  subset = dt[position_before == p]
+  pa_s = summary(subset$position_after)
+  runs_s = summary(as.factor(subset$runs_scored_EOI))
+  
+  pa_dt = data.table(names(pa_s), pa_s) %>% setnames(old = "pa_s", new = p)
+  runs_dt = data.table(names(runs_s), runs_s) %>% 
+    setnames(old = c("V1", "runs_s"), new = c("runs", p))
+  
+  pa_table = merge(pa_table, pa_dt, by = "V1", all = T)
+  runs_table = merge(runs_table, runs_dt, by = "runs", all = T)
+}
+# Set NA = 0
+pa_table[is.na(pa_table)] = 0
+runs_table[is.na(runs_table)] = 0 
+
+# This is transition of matrix of position before to positions after. The columns are positions_before and the rows are counts of the different positions_after for a given position_before.
+pa_table
+
+# Convert the table from counts to percentages
+# Take sums of columns
+col_sums = colSums(pa_table[, -1])
+
+# Divide each column by the sum of the column
+pa_prob_table = cbind(pa_table[, 1], sweep(pa_table[, -1], 2, col_sums, '/')) 
+
+
+# Heatmap of Position After Percentages for each given Position Before
+# Note that this is standardized by each situation, not necessarily saying anything about frequency
+mat = as.matrix(pa_prob_table[,-1], rownames = pa_prob_table$V1)
+melted = melt(mat)
+
+ggplot(melted, aes(x=Var2, y=Var1, fill=value)) + geom_tile(color = "white") + 
+  scale_fill_gradient(low = "white", high = "darkgreen") +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  labs(x = "Position Before", y = "Position After % (standardized by column)") + 
+  ggtitle("Heatmap of Position After Percentage")
+
+# Export tables to CSV in working directory
+pa_table %>% write.csv(file = "pa_table.csv") 
+pa_prob_table %>% write.csv(file = "pa_prob_table.csv")
+
+
+
+```
+
+# Heatmap of Position after Percentage
+
+```{r}
+
+# This is a table of number of runs for each given position_before. We created this in the same loop as the position_before -> position_after table above.
+runs_table = runs_table[order(as.integer(runs))]
+runs_table
+runs_table %>% write.csv("runs_table.csv") #Write to CSV
+
+# Distribution of Runs Scored End of Inning (EOI)
+ggplot(runs_table, aes(x = as.factor(order(as.integer(runs))), 
+                       y = runs_totals/1000)) +
+  geom_bar(stat = 'identity') + 
+  ggtitle("Distribution of Runs Scored EOI") + 
+  labs(x="Runs Scored EOI", y = "# of Obs (in 000s)")
+
+# Heatmap of Runs by Position Before
+# Reduce range to [0, 5] runs
+mat = as.matrix(runs_table[1:6, -c(1:2)], rownames = runs_table$runs[1:6])
+melted = melt(mat)
+
+ggplot(melted, aes(x=Var2, y=Var1, fill=value)) + geom_tile(color = "white") + 
+  scale_fill_gradient(low = "white", high = "darkgreen") +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  labs(x = "Position Before", y = "# of Runs Scored EOI") + 
+  ggtitle("Heatmap of Position After Percentage")
+
+```

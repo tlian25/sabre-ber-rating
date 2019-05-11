@@ -1,0 +1,296 @@
+---
+title: "BER_models"
+author: "TXL"
+output:
+  #pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(tidyverse)
+```
+
+
+# Exploration of different models for BER calculation
+
+Load 2018 Data
+```{r}
+# Make sure folder is correct
+folder_name = "/Users/txl/TXL_R/Final Data"
+dt = fread(paste(folder_name, "/2018dataClean.csv", sep = ""))
+
+# Rename "Runs Scored till end of inning"
+dt %>% setnames(old = c("Position Before", "Position After",
+                        "Runs Scored till end of inning", "League",
+                        "Park_Factor", "FIP_Pitcher_Control"), 
+                new = c("position_before", "position_after", 
+                        "runs_scored_EOI", "league",
+                        "park_factor", "FIP"))
+
+# Make position_before and position_after factors
+dt$position_before = as.factor(dt$position_before)
+dt$position_after = as.factor(dt$position_after)
+
+# Make league a factor
+dt$league = as.factor(dt$league)
+
+# Divide park_factor by 100 to turn to a percent measure
+dt$park_factor = dt$park_factor / 100
+
+# Turn FIP into numeric
+dt$FIP = as.numeric(dt$FIP)
+```
+
+# Preliminary Visualizations for Factors
+```{r, warning=F}
+## Explore park_factor
+parks_dt = unique(dt[, c("Stadium", "park_factor")])
+# Bargraph
+ggplot(parks_dt, aes(x = Stadium, y = park_factor)) + 
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  ggtitle("Park Factors")
+  
+## Explore FIP
+fip_dt = unique(dt[, c("res_pitcher", "FIP")])
+# Histogram
+ggplot(fip_dt, aes(x = FIP)) + 
+  geom_histogram(binwidth = .5) + 
+  ggtitle("Histogram of FIP")
+```
+Some notes here:
++ Maybe we need to remove some outliers in FIP
++ Leaving park_factor as is since it looks like a percentage measure
+
+
+
+# Model 1: position_before only
+```{r}
+m1 = lm(runs_scored_EOI ~ position_before - 1, 
+        dat = dt)
+summary(m1)
+m1_vt = m1$coefficients %>% data.table(factor = names(.), value = .)
+
+#Graph coefficients
+m1_vt %>% 
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("M1 Coefficients")
+
+```
+
+# Model 2: 
+## Model 2 Version 1: position_before and league (no interaction)
+```{r}
+m2_v1 = lm(runs_scored_EOI ~ position_before + league - 1, 
+        dat = dt)
+summary(m2_v1)
+m2_v1_vt = m2_v1$coefficients %>% data.table(factor = names(.), value = .)
+
+m2_v1_vt %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  ggtitle("m2_v1 Coefficients (all factors)")
+```
+
+## Model 2 Version 2: position_before and league (include main league effect)
+```{r}
+m2_v2 = lm(runs_scored_EOI ~ position_before * league - 1, 
+           dat = dt)
+summary(m2_v2)
+m2_v2_vt = m2_v2$coefficients %>% data.table(factor = names(.), value = .)
+
+# Graph all factor values
+m2_v2_vt %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m2_v2 Coefficients (all factors)")
+
+# Graph only position_before values
+m2_v2_vt[1:24, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m2_v2 Coefficients (position_before only)")
+
+# Graph interaction effect values
+m2_v2_vt[25:48, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m2_v2 Coefficients (interaction only)")
+
+```
+
+## Model 2 Version 3: position_before and league (without main league effect)
+```{r}
+m2_v3 = lm(runs_scored_EOI ~ position_before + position_before:league - 1, 
+           dat = dt)
+summary(m2_v3)
+m2_v3_vt = m2_v3$coefficients %>% data.table(factor = names(.), value = .)
+
+# Graph all factor values
+m2_v3_vt %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m2_v3 Coefficients (all factors)")
+
+# Graph only position_before values
+m2_v3_vt[1:24, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m2_v3 Coefficients (position_before only)")
+
+# Graph interaction effect values
+m2_v3_vt[25:48, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m2_v3 Coefficients (interaction only)")
+
+```
+
+
+# Model 3
+## Model 3 Version 1: position_before and park_factor (no interaction)
+```{r}
+m3_v1 = lm(runs_scored_EOI ~ position_before + park_factor - 1, 
+           dat = dt)
+summary(m2_v1)
+m3_v1_vt = m3_v1$coefficients %>% data.table(factor = names(.), value = .)
+
+# Graph all factor values
+m3_v1_vt %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m3_v1 Coefficients (all factors)")
+```
+
+
+## Model 3 Version 2: position_before and park_factor (include main park_factor effect)
+```{r}
+m3_v2 = lm(runs_scored_EOI ~ position_before * park_factor - 1, 
+           dat = dt)
+summary(m3_v2)
+m3_v2_vt = m3_v2$coefficients %>% data.table(factor = names(.), value = .)
+
+# Graph all factor values
+m3_v2_vt %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m3_v2 Coefficients (all factors)")
+
+# Graph only position_before values
+m3_v2_vt[1:24, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m3_v2 Coefficients (position_before only)")
+
+# Graph interaction effect values
+m3_v2_vt[25:48, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m3_v2 Coefficients (interaction only)")
+
+```
+
+
+## Model 3 Version 3: position_before and park_factor (without main park_factor effect)
+```{r}
+m3_v3 = lm(runs_scored_EOI ~ position_before + position_before:park_factor - 1, 
+           dat = dt)
+summary(m3_v3)
+m3_v3_vt = m3_v3$coefficients %>% data.table(factor = names(.), value = .)
+
+# Graph all factor values
+m3_v3_vt %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m3_v3 Coefficients (all factors)")
+
+# Graph only position_before values
+m3_v3_vt[1:24, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m3_v3 Coefficients (position_before only)")
+
+# Graph interaction effect values
+m3_v3_vt[25:48, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m3_v3 Coefficients (interaction only)")
+
+```
+
+# Model 4
+## Model 4 Version 1: position_before and FIP (no interaction)
+```{r}
+m4_v1 = lm(runs_scored_EOI ~ position_before + FIP - 1, 
+           dat = dt)
+summary(m4_v1)
+m4_v1_vt = m4_v1$coefficients %>% data.table(factor = names(.), value = .)
+
+# Graph all factor values
+m4_v1_vt %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m4_v1 Coefficients (all factors)")
+
+```
+
+## Model 4 Version 2: position_before and FIP (include main FIP factor)
+```{r}
+m4_v2 = lm(runs_scored_EOI ~ position_before * FIP - 1, 
+           dat = dt)
+summary(m4_v2)
+m4_v2_vt = m4_v2$coefficients %>% data.table(factor = names(.), value = .)
+
+# Graph all factor values
+m4_v2_vt %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m4_v2 Coefficients (all factors)")
+
+# Graph only position_before values
+m4_v2_vt[1:24, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m4_v2 Coefficients (position_before only)")
+
+# Graph interaction effect values
+m4_v2_vt[25:48, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m4_v2 Coefficients (interaction only)")
+
+```
+
+## Model 4 Version 3: position_before and FIP (without main FIP factor)
+```{r}
+m4_v3 = lm(runs_scored_EOI ~ position_before + position_before:FIP - 1, 
+           dat = dt)
+summary(m4_v3)
+m4_v3_vt = m4_v3$coefficients %>% data.table(factor = names(.), value = .)
+
+# Graph all factor values
+m4_v3_vt %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m4_v3 Coefficients (all factors)")
+
+# Graph only position_before values
+m4_v3_vt[1:24, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m4_v3 Coefficients (position_before only)")
+
+# Graph interaction effect values
+m4_v3_vt[25:48, ] %>%
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("m4_v3 Coefficients (interaction only)")
+
+```
+
+
+
+
