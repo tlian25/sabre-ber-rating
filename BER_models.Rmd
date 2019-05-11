@@ -1,13 +1,7 @@
 ---
 title: "BER_models"
 author: "TXL"
-output:
-  html_document: default
-  knit: (function(input_file, encoding) {
-    out_dir <- 'BER_models';
-    rmarkdown::render(input_file,
-    encoding=encoding,
-    output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+output: rmarkdown::github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -64,6 +58,7 @@ ggplot(fip_dt, aes(x = FIP)) +
   geom_histogram(binwidth = .5) + 
   ggtitle("Histogram of FIP")
 ```
+
 Some notes here:
 + Maybe we need to remove some outliers in FIP
 + Leaving park_factor as is since it looks like a percentage measure
