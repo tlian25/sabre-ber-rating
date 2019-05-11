@@ -60,7 +60,9 @@ ggplot(fip_dt, aes(x = FIP)) +
   ggtitle("Histogram of FIP")
 ```
 
-![](BER_models_files/figure-markdown_github/unnamed-chunk-2-2.png) Some notes here: + Maybe we need to remove some outliers in FIP + Leaving park\_factor as is since it looks like a percentage measure
+![](BER_models_files/figure-markdown_github/unnamed-chunk-2-2.png)
+
+Some notes here: + Maybe we need to remove some outliers in FIP + Leaving park\_factor as is since it looks like a percentage measure
 
 Model 1: position\_before only
 ==============================
