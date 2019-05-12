@@ -10,6 +10,18 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(data.table)
 library(tidyverse)
+# Make sure folder is correct
+folder_name = "/Users/txl/TXL_R/Final Data"
+dt = fread(paste(folder_name, "/2018dataClean.csv", sep = ""))
+# Rename "Runs Scored till end of inning"
+dt %>% setnames(old = c("Position Before", "Position After",
+                        "Runs Scored till end of inning", "Runs_Scored", 
+                        "League", "Park_Factor", "FIP_Pitcher_Control"), 
+                new = c("position_before", "position_after", 
+                        "runs_scored_EOI", "runs_scored", 
+                        "league", "park_factor", "FIP"))
+
+
 ```
 
 
@@ -17,17 +29,8 @@ library(tidyverse)
 
 Load 2018 Data
 ```{r}
-# Make sure folder is correct
-folder_name = "/Users/txl/TXL_R/Final Data"
-dt = fread(paste(folder_name, "/2018dataClean.csv", sep = ""))
-
-# Rename "Runs Scored till end of inning"
-dt %>% setnames(old = c("Position Before", "Position After",
-                        "Runs Scored till end of inning", "League",
-                        "Park_Factor", "FIP_Pitcher_Control"), 
-                new = c("position_before", "position_after", 
-                        "runs_scored_EOI", "league",
-                        "park_factor", "FIP"))
+# Load data is hidden for privacy
+head(dt, 20)
 
 # Make position_before and position_after factors
 dt$position_before = as.factor(dt$position_before)
@@ -41,6 +44,12 @@ dt$park_factor = dt$park_factor / 100
 
 # Turn FIP into numeric
 dt$FIP = as.numeric(dt$FIP)
+
+# Calculate max_runs possible scored
+dt$max_runs = as.numeric(dt$first_runner != "") + 
+  as.numeric(dt$second_runner != "") +
+  as.numeric(dt$third_runner != "") + 1
+  
 ```
 
 # Preliminary Visualizations for Factors
@@ -293,5 +302,246 @@ m4_v3_vt[25:48, ] %>%
 ```
 
 
+# Calculating BER based on models
+
+For each model, we need to perform the following steps for BER calculation:
+1. Match each position_before with corresponding value
+2. Match each position_after with corresponding value
+3. Calculate value_created = runs_scored + value_pa - value_vb
+4. Calculate value_max = #runnners + 1 + value_reset_same_outs
+5. BER = value_created / value_max
+
+# Model 1 BER: position_before only
+```{r}
+# Create a value list. Basically a dictionary for faster reference.
+state = sort(unique(dt$position_before))
+m1_vt$state = state
+m1_vl = m1_vt$value
+names(m1_vl) = m1_vt$state
+m1_vl = c(m1_vl, "end inning" = 0)
+
+# Create a condensed data.table
+m1_dt = dt[, c("res_batter", "position_before", "position_after",
+               "runs_scored", "max_runs", "runs_scored_EOI", "outs")]
 
 
+# Calculate values of position_before
+m1_dt$value_pb = sapply(m1_dt$position_before, 
+                        function(pb) return(m1_vl[pb]))
+
+# Calculate value of position_after
+m1_dt$value_pa = sapply(m1_dt$position_after,
+                        function(pa) return(m1_vl[pa]))
+
+# Calculate value_max
+m1_dt$value_max = m1_dt$max_runs - m1_dt$value_pb + 
+  sapply(m1_dt$outs, function(o) switch(o + 1, m1_vl["['0,0,0,0']"], 
+                                        m1_vl["['1,0,0,0']"],
+                                        m1_vl["['2,0,0,0']"]))
+
+# Calculate value_created
+m1_dt$value_created = m1_dt$runs_scored + m1_dt$value_pa - m1_dt$value_pb
+# Calculate BER
+m1_dt$BER = m1_dt$value_created / m1_dt$value_max
+
+```
+
+
+# Model 2 Version 1 BER: position_before and league (no interaction)
+```{r}
+# Create a value list. Basically a dictionary for faster reference.
+state = c(sort(unique(dt[league == "AL"]$PositionBefore_League)), 
+          sort(unique(dt[league == "NL"]$PositionBefore_League)))
+m2_v1_vl = c(m2_v1_vt$value[1:24], m2_v1_vt$value[1:24] + m2_v1_vt$value[25])
+names(m2_v1_vl) = state
+m2_v1_vl = c(m2_v1_vl, "end inningAL" = 0, "end inningNL" = 0)
+
+# Create a condensed data.table
+m2_v1_dt = dt[, c("res_batter", "PositionBefore_League", "PositionAfter_League",
+                  "runs_scored", "max_runs", "runs_scored_EOI", 
+                  "outs", "league")]
+
+# Calculate values of position_before and position_after
+m2_v1_dt$value_pb = sapply(m2_v1_dt$PositionBefore_League, 
+                           function(pb) m2_v1_vl[pb])
+
+# Calculate value of position_after
+m2_v1_dt$value_pa = sapply(m2_v1_dt$PositionAfter_League, 
+                           function(pa) m2_v1_vl[pa])
+
+
+# Calculate value_max
+m2_v1_dt$value_max = m2_v1_dt$max_runs - m2_v1_dt$value_pb + 
+  mapply(function(o, l) ifelse(l == "NL", 
+                               switch(o + 1, m2_v1_vl["['0,0,0,0']NL"], 
+                                      m2_v1_vl["['1,0,0,0']NL"],
+                                      m2_v1_vl["['2,0,0,0']NL"]),
+                               switch(o + 1, m2_v1_vl["['0,0,0,0']AL"], 
+                                      m2_v1_vl["['1,0,0,0']AL"],
+                                      m2_v1_vl["['2,0,0,0']AL"])),
+         m2_v1_dt$outs, 
+         m2_v1_dt$league)
+
+# Calculate value_created
+m2_v1_dt$value_created = m2_v1_dt$runs_scored + m2_v1_dt$value_pa - m2_v1_dt$value_pb
+# Calculate BER
+m2_v1_dt$BER = m2_v1_dt$value_created / m2_v1_dt$value_max
+
+```
+# Model 2 Version 2 BER: position_before and league (include main league effect)
+I realize here that since there are only 24 states, Version 2 and Version 3 of Model 2 are essentially the same. And since v3 has a more straight forward interpretation, we will skip down to it. 
+
+# Model 2 Version 3 BER: position_before and league (without main league effect interaction)
+```{r}
+# Create a value list. Basically a dictionary for faster reference.
+state = c(sort(unique(dt[league == "AL"]$PositionBefore_League)), 
+          sort(unique(dt[league == "NL"]$PositionBefore_League)))
+m2_v3_vl = m2_v3_vt$value
+names(m2_v3_vl) = state
+m2_v3_vl = c(m2_v3_vl, "end inningNL" = 0, "end inningAL" = 0)
+
+# Create a condensed data.table
+m2_v3_dt = dt[, c("res_batter", "PositionBefore_League", "PositionAfter_League",
+                  "runs_scored", "max_runs", "runs_scored_EOI", 
+                  "outs", "league")]
+
+# Calculate values of position_before and position_after
+m2_v3_dt$value_pb = sapply(m2_v3_dt$PositionBefore_League, 
+                           function(pb) m2_v3_vl[pb])
+
+# Calculate value of position_after
+m2_v3_dt$value_pa = sapply(m2_v3_dt$PositionAfter_League, 
+                           function(pa) m2_v3_vl[pa])
+
+
+# Calculate value_max
+m2_v3_dt$value_max = m2_v3_dt$max_runs - m2_v3_dt$value_pb + 
+  mapply(function(o, l) ifelse(l == "NL", 
+                               switch(o + 1, m2_v3_vl["['0,0,0,0']NL"], 
+                                      m2_v3_vl["['1,0,0,0']NL"],
+                                      m2_v3_vl["['2,0,0,0']NL"]),
+                               switch(o + 1, m2_v3_vl["['0,0,0,0']AL"], 
+                                      m2_v3_vl["['1,0,0,0']AL"],
+                                      m2_v3_vl["['2,0,0,0']AL"])),
+         m2_v3_dt$outs, 
+         m2_v3_dt$league)
+
+
+# Calculate value_created
+m2_v3_dt$value_created = m2_v3_dt$runs_scored + m2_v3_dt$value_pa - m2_v3_dt$value_pb
+# Calculate BER
+m2_v3_dt$BER = m2_v3_dt$value_created / m2_v3_dt$value_max
+
+```
+
+
+
+# Plot BER for players
+```{r}
+# Load player names
+player_names = fread(paste(folder_name, "/Dictionary for Player Names.csv", sep=""), 
+                     col.names = c("res_batter", "player_name"))[order(res_batter)]
+player_list = sort(unique(dt$res_batter))
+
+# Plate appearance counts
+PA_count_table = count(dt, res_batter)
+
+# List of Models of evaluate
+model_list = list(m1_dt, m2_v1_dt, m2_v3_dt)
+
+# Create a list BERs for player from our model_list
+BER_list = list()
+RE24_list = list()
+for (i in 1:length(model_list)) {
+  # BER
+  BER_list[[i]] = model_list[[i]] %>% 
+    group_by(res_batter) %>% 
+    summarize(BER_mean = mean(BER))
+  # RE24
+  RE24_list[[i]] = model_list[[i]] %>% 
+    group_by(res_batter) %>% 
+    summarize(RE24 = sum(value_created))
+}
+
+# Aggregate in a table
+
+
+
+
+
+```
+
+
+
+# Extraneous code for plotting and exploration (Not included in output)
+
+```{r, eval=F}
+# Set the data.table for the model we want to examine
+model_dt = m2_v3_dt
+
+player_names = fread("/Users/txl/Google Drive/Sports Analytics/Final Data/Dictionary for Player Names.csv", col.names = c("res_batter", "player_name"))[order(res_batter)]
+player_list = sort(unique(model_dt$res_batter))
+BER_mean_table = model_dt %>% group_by(res_batter) %>% summarize(BER_mean = mean(BER))
+RE24 = model_dt %>% group_by(res_batter) %>% summarize(RE24 = sum(value_created))
+PA_count_table = count(model_dt, res_batter)
+
+# Create a BER table for players
+BER_table = data.table(res_batter = player_names[res_batter %in%
+                                                   player_list]$res_batter,
+                       player_names = player_names[res_batter %in%
+                                                     player_list]$player_name,
+                       BER_mean = BER_mean_table$BER_mean, 
+                       RE24,
+                       PA_count = PA_count_table$n)
+
+BER_table[, res_batter := NULL]
+
+# Top 10 Player BERs with PA > 100
+head(BER_table[PA_count > 100][order(BER_mean, decreasing = T)][, -c("res_batter")], 10)
+# Bottom 10 
+head(BER_table[PA_count > 100][order(BER_mean, decreasing = F)][,-c("res_batter")], 10)
+
+
+# Top 10 Player BERs 
+head(BER_table[order(RE24, decreasing = T)][, -c("res_batter")], 10)
+# Bottom 10 
+head(BER_table[order(RE24, decreasing = F)][,-c("res_batter")], 10)
+
+# Histogram of AB_count
+ggplot(BER_table, aes(x=PA_count)) + 
+  geom_histogram(binwidth = 10) + 
+  ggtitle("Histogram of PA_count")
+
+
+# Histogram of BER 
+ggplot(BER_table, aes(x=BER_mean)) +
+  ggtitle("Histogram of BER_mean (All PA)") +
+  geom_histogram(binwidth = .005)
+
+# Histogram of BER for players with > 100 PA
+ggplot(BER_table[PA_count > 100], aes(x=BER_mean)) + 
+  ggtitle("Histogram of BER_mean (PA > 100)") + 
+  geom_histogram(binwidth = .005)
+
+ggplot(BER_table[PA_count > 500], aes(x=BER_mean)) + 
+  ggtitle("Histogram of BER_mean (PA > 500)") + 
+  geom_histogram(binwidth = .005)
+
+# Plot BER vs RE24 (no labels)
+ggplot(BER_table[,-c("res_batter")][PA_count >100], aes(x = BER_mean, y = RE24, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") +
+  ggtitle("RE24 vs BER (PA > 100)")
+
+# Plot BER vs RE24 (labels)
+ggplot(BER_table[,-c("res_batter")][PA_count >100], aes(x = BER_mean, y = RE24, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_text(aes(label = player_names)) +
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") + 
+  ggtitle("RE24 vs BER (PA > 100)")
+
+```
