@@ -1,0 +1,57 @@
+---
+  title: "BER_models_v2"
+author: "TXL"
+#output: rmarkdown::github_document
+#output: pdf_document
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(tidyverse)
+library(gridExtra)
+# Make sure folder is correct
+folder_name = "/Users/txl/TXL_R/Final Data"
+dt = fread(paste(folder_name, "/2018dataClean.csv", sep = ""))
+# Rename "Runs Scored till end of inning"
+dt %>% setnames(old = c("Position Before", "Position After",
+                        "Runs Scored till end of inning", "Runs_Scored", 
+                        "League", "Park_Factor", "FIP_Pitcher_Control"), 
+                new = c("position_before", "position_after", 
+                        "runs_scored_EOI", "runs_scored", 
+                        "league", "park_factor", "FIP"))
+
+
+```
+
+
+# BER Models V2
+Load 2018 Data
+```{r}
+# Load data is hidden for privacy
+head(dt, 20)
+
+# Make position_before and position_after factors
+dt$position_before = as.factor(dt$position_before)
+dt$position_after = as.factor(dt$position_after)
+
+# Make league a factor
+dt$league = as.factor(dt$league)
+
+# Divide park_factor by 100 to turn to a percent measure
+dt$park_factor = dt$park_factor / 100
+
+# Turn FIP into numeric
+dt$FIP = as.numeric(dt$FIP)
+
+# Calculate max_runs possible scored
+dt$max_runs = as.numeric(dt$first_runner != "") + 
+  as.numeric(dt$second_runner != "") +
+  as.numeric(dt$third_runner != "") + 1
+  
+```
+
+
+
+

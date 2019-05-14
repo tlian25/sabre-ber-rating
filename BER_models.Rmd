@@ -10,6 +10,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(data.table)
 library(tidyverse)
+library(gridExtra)
 # Make sure folder is correct
 folder_name = "/Users/txl/TXL_R/Final Data"
 dt = fread(paste(folder_name, "/2018dataClean.csv", sep = ""))
@@ -134,10 +135,12 @@ m2_v2_vt[25:48, ] %>%
 
 ## Model 2 Version 3: position_before and league (without main league effect)
 ```{r}
-m2_v3 = lm(runs_scored_EOI ~ position_before + position_before:league - 1, 
+m2_v3 = lm(runs_scored_EOI ~ PositionBefore_League - 1, 
            dat = dt)
 summary(m2_v3)
 m2_v3_vt = m2_v3$coefficients %>% data.table(factor = names(.), value = .)
+
+
 
 # Graph all factor values
 m2_v3_vt %>%
@@ -394,8 +397,7 @@ I realize here that since there are only 24 states, Version 2 and Version 3 of M
 # Model 2 Version 3 BER: position_before and league (without main league effect interaction)
 ```{r}
 # Create a value list. Basically a dictionary for faster reference.
-state = c(sort(unique(dt[league == "AL"]$PositionBefore_League)), 
-          sort(unique(dt[league == "NL"]$PositionBefore_League)))
+state = sort(unique(dt$PositionBefore_League))
 m2_v3_vl = m2_v3_vt$value
 names(m2_v3_vl) = state
 m2_v3_vl = c(m2_v3_vl, "end inningNL" = 0, "end inningAL" = 0)
@@ -452,6 +454,7 @@ model_list = list(m1_dt, m2_v1_dt, m2_v3_dt)
 # Create a list BERs for player from our model_list
 BER_list = list()
 RE24_list = list()
+ggplot_list = list()
 for (i in 1:length(model_list)) {
   # BER
   BER_list[[i]] = model_list[[i]] %>% 
@@ -461,15 +464,136 @@ for (i in 1:length(model_list)) {
   RE24_list[[i]] = model_list[[i]] %>% 
     group_by(res_batter) %>% 
     summarize(RE24 = sum(value_created))
+  
+
+
+  
 }
 
 # Aggregate in a table
+player_table = data.table(res_batter = player_names[res_batter %in%
+                                                   player_list]$res_batter,
+                          player_names = player_names[res_batter %in%
+                                                     player_list]$player_name,
+                          BER_m1 = BER_list[[1]]$BER_mean,
+                          BER_m2_v1 = BER_list[[2]]$BER_mean,
+                          BER_m2_v3 = BER_list[[3]]$BER_mean,
+                          RE24_m1 = RE24_list[[1]]$RE24,
+                          RE24_m2_v1 = RE24_list[[2]]$RE24,
+                          RE24_m2_v3 = RE24_list[[3]]$RE24,
+                          PA_count = PA_count_table$n)
+```
+
+# Graphs for the models
+
+```{r}
+# Histogram of BER for all players
+hist_m1.1 = ggplot(player_table, aes(x=BER_m1)) +
+  geom_histogram(binwidth = .005) +
+  ggtitle("Histogram of BER (All PA)[Basic Model]")
+   
+  
+# Histogram of BER for players with > 100 PA
+hist_m1.2 = ggplot(player_table[PA_count > 100], aes(x=BER_m1)) + 
+  geom_histogram(binwidth = .005) +
+  ggtitle("Histogram of BER (PA > 100)[Basic Model]") 
+
+# Plot BER vs RE24 (no labels)
+scatter_m1.1 = ggplot(player_table[PA_count >100], 
+                    aes(x = BER_m1, y = RE24_m1, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") +
+  ggtitle("RE24 vs BER (PA > 100)[Basic Model]")
+
+# Plot BER vs RE24 (labels)
+scatter_m1.2 = ggplot(player_table[PA_count >100], 
+                      aes(x = BER_m1, y = RE24_m1, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_text(aes(label = player_names)) +
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") + 
+  ggtitle("RE24 vs BER (PA > 100)[Basic Model]")
 
 
+# Model 2 v1 ########################################
+hist_m2_v1.1 = ggplot(player_table, aes(x=BER_m2_v1)) +
+  geom_histogram(binwidth = .005) +
+  ggtitle("Histogram of BER (All PA)[League Model]")
+  
 
+hist_m2_v1.2 = ggplot(player_table[PA_count > 100], aes(x=BER_m2_v1)) +
+  geom_histogram(binwidth = .005) + 
+  ggtitle("Histogram of BER (PA > 100)[League Model]")
+
+# Plot BER vs RE24 (no labels)
+scatter_m2_v1.1 = ggplot(player_table[PA_count >100], 
+                    aes(x = BER_m2_v1, y = RE24_m2_v1, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") +
+  ggtitle("RE24 vs BER (PA > 100)[Basic Model]")
+
+# Plot BER vs RE24 (labels)
+scatter_m2_v1.2 = ggplot(player_table[PA_count >100], 
+                      aes(x = BER_m2_v1, y = RE24_m2_v1, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_text(aes(label = player_names)) +
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") + 
+  ggtitle("RE24 vs BER (PA > 100)[Basic Model]")
+
+# Model 2 v3 ##########################################
+hist_m2_v3.1 = ggplot(player_table, aes(x=BER_m2_v3)) +
+  geom_histogram(binwidth = .005) +
+  ggtitle("Histogram of BER (All PA)[League Interaction Model]")
+  
+
+hist_m2_v3.2 = ggplot(player_table[PA_count > 100], aes(x=BER_m2_v3)) +
+  geom_histogram(binwidth = .005) + 
+  ggtitle("Histogram of BER (PA > 100)[League Interaction Model]")
+
+
+scatter_m2_v3.1 = ggplot(player_table[PA_count >100], 
+                    aes(x = BER_m2_v3, y = RE24_m2_v3, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") +
+  ggtitle("RE24 vs BER (PA > 100)[League Interaction Model]")
+
+scatter_m2_v3.2 = ggplot(player_table[PA_count >100], 
+                      aes(x = BER_m2_v3, y = RE24_m2_v3, label = player_names)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_text(aes(label = player_names)) +
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") + 
+  ggtitle("RE24 vs BER (PA > 100)[League Interaction Model]")
+
+grid.arrange(hist_m1.1, hist_m1.2, scatter_m1.2,
+             hist_m2_v1.1, hist_m2_v1.2, scatter_m2_v1.2,
+             hist_m2_v3.1, hist_m2_v3.2, scatter_m2_v3.2,
+             ncol = 3)
+
+
+# Split NL and AL players ###################################
+
+player_leagues = dt[, c("res_batter", "league")]
 
 
 ```
+
+
+
+
+
+
+
 
 
 
@@ -523,6 +647,7 @@ ggplot(BER_table[PA_count > 100], aes(x=BER_mean)) +
   ggtitle("Histogram of BER_mean (PA > 100)") + 
   geom_histogram(binwidth = .005)
 
+# Histogram of BER for players with > 500 PA
 ggplot(BER_table[PA_count > 500], aes(x=BER_mean)) + 
   ggtitle("Histogram of BER_mean (PA > 500)") + 
   geom_histogram(binwidth = .005)
