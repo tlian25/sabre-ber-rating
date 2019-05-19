@@ -1,5 +1,5 @@
 ---
-  title: "BER_models_v2"
+title: "BER_models_v2"
 author: "TXL"
 #output: rmarkdown::github_document
 #output: pdf_document
@@ -318,7 +318,7 @@ scatter_m1.2 = ggplot(player_table[PA_count >100],
                       aes(x = BER_m1, y = RE24_m1, label = player_name)) +
   geom_point() + 
   geom_smooth() + 
-  geom_text(aes(label = player_names)) +
+  geom_text(aes(label = player_name)) +
   geom_smooth(method="lm", color = "red") + 
   xlab("BER") + 
   ggtitle("RE24 vs BER (PA > 100)[Basic Model]")
