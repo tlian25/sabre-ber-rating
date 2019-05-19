@@ -13,7 +13,7 @@ library(tidyverse)
 library(gridExtra)
 # Make sure folder is correct
 folder_name = "/Users/txl/TXL_R/Final Data"
-dt = fread(paste(folder_name, "/2018dataClean.csv", sep = ""))
+dt = fread(paste(folder_name, "/2017dataClean.csv", sep = ""))
 # Rename "Runs Scored till end of inning"
 dt %>% setnames(old = c("Position Before", "Position After",
                         "Runs Scored till end of inning", "Runs_Scored", 
@@ -27,7 +27,7 @@ dt %>% setnames(old = c("Position Before", "Position After",
 
 
 # BER Models V2
-Load 2018 Data
+## Load 2018 Data
 ```{r}
 # Load data is hidden for privacy
 head(dt, 20)
@@ -39,19 +39,155 @@ dt$position_after = as.factor(dt$position_after)
 # Make league a factor
 dt$league = as.factor(dt$league)
 
-# Divide park_factor by 100 to turn to a percent measure
-dt$park_factor = dt$park_factor / 100
+# Transform park_factor to be a percentage above or below 100%
+dt$park_factor = dt$park_factor / 100 - 1
 
 # Turn FIP into numeric
+# NOTE: We have some NA FIPs
 dt$FIP = as.numeric(dt$FIP)
 
 # Calculate max_runs possible scored
 dt$max_runs = as.numeric(dt$first_runner != "") + 
   as.numeric(dt$second_runner != "") +
   as.numeric(dt$third_runner != "") + 1
+
+
   
+```
+# Create Models
+
+```{r}
+# Basic Model
+# Only position_before effects
+m1 = lm(runs_scored_EOI ~ position_before - 1, data = dt)
+summary(m1)
+# Store results in a table
+m1_table = m1$coefficients %>% 
+  data.table(factor = lapply(names(.), function(s) gsub("position_before", "", s)),
+             value = .)
+  
+
+# League Model
+# position_before and league
+m2 = lm(runs_scored_EOI ~ position_before + position_before:league - 1 , data = dt)
+summary(m2)
+# Store results in a table
+coef = names(m2$coefficients) %>% 
+  lapply(function(s) gsub("position_before", "", s)) %>%
+  lapply(function(s) gsub(":league", "", s))
+m2_table = m2$coefficients %>% data.table(factor = names(.), value = ., state = coef)
+
+
+
+# Park_factor model
+# position_before and park_factor
+m3 = lm(runs_scored_EOI ~ position_before + position_before:park_factor - 1, data = dt)
+summary(m3)
+# Store results in a table
+
+
+# FIP Model
+m4 = lm(runs_scored_EOI ~ position_before + position_before:FIP - 1, data = dt)
+summary(m4)
+
 ```
 
 
+# Explore League Factor Model
 
+```{r}
+coef = names(m2$coefficients) %>% 
+  lapply(function(s) gsub("position_before", "", s)) %>%
+  lapply(function(s) gsub(":league", "", s))
+
+m2_table = m2$coefficients %>% data.table(factor = names(.), value = ., state = coef)
+
+# Plot all factors
+m2_table %>%
+  ggplot(aes(x = as.factor(factor), y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("League Model Coefficients (all factors)")
+
+# Plot NL and AL factors
+m2_table[1:24, ] %>%
+  ggplot(aes(x = as.factor(factor), y = value)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("League Model Coefficients (all factors)")
+
+data.table(factor = m2_table[1:24,]$factor, 
+           AL_value = m2_table[1:24,]$value,
+           NL_value = m2_table[1:24,]$value + m2_table[25:48,]$value) %>% 
+  melt() %>% 
+  ggplot(aes(x = factor, y = value, fill = variable)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("League Model Coefficients")
+
+# Plot Difference for each state between the two leagues
+data.table(factor = m2_table[1:24,]$factor,
+           diff = m2_table[25:48,]$value) %>%
+  ggplot(aes(x = factor, y = diff)) +
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) + 
+  ggtitle("Difference between leagues")
+
+# Plot Difference as a percent of each state
+data.table(factor = m2_table[1:24,]$factor,
+           diff_pct = m2_table[25:48,]$value/ m2_table[1:24,]$value) %>%
+  ggplot(aes(x = factor, y = diff_pct)) +
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) + 
+  ggtitle("Difference between leagues (as % of each state)")
+
+```
+
+
+# Using models to Calculate BER for players
+
+## Basic Model
+```{r}
+# Create a value list. Basically a dictionary for faster reference.
+state = sort(unique(dt$position_before))
+m1_vt$state = state
+m1_vl = m1_vt$value
+names(m1_vl) = m1_vt$state
+m1_vl = c(m1_vl, "end inning" = 0)
+
+# Create a condensed data.table
+m1_dt = dt[, c("res_batter", "position_before", "position_after",
+               "runs_scored", "max_runs", "runs_scored_EOI", "outs")]
+
+
+# Calculate values of position_before
+m1_dt$value_pb = sapply(m1_dt$position_before, 
+                        function(pb) return(m1_vl[pb]))
+
+# Calculate value of position_after
+m1_dt$value_pa = sapply(m1_dt$position_after,
+                        function(pa) return(m1_vl[pa]))
+
+# Calculate value_max
+m1_dt$value_max = m1_dt$max_runs - m1_dt$value_pb + 
+  sapply(m1_dt$outs, function(o) switch(o + 1, m1_vl["['0,0,0,0']"], 
+                                        m1_vl["['1,0,0,0']"],
+                                        m1_vl["2,0,0,0"]))
+
+# Calculate value_created
+m1_dt$value_created = m1_dt$runs_scored + m1_dt$value_pa - m1_dt$value_pb
+# Calculate BER
+m1_dt$BER = m1_dt$value_created / m1_dt$value_max
+
+```
+
+## League Model
+```{r}
+# Create a value list. Basically a dictionary for faster reference.
+state = sort(unique(dt$position_before))
+m2_vt$state = state
+m2_vl = m2_vt$value
+names(m2_vl) = m1_vt$state
+m2_vl = c(m2_vl, "end inning" = 0)
+
+
+```
 

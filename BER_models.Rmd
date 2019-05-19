@@ -567,7 +567,7 @@ scatter_m2_v3.1 = ggplot(player_table[PA_count >100],
   ggtitle("RE24 vs BER (PA > 100)[League Interaction Model]")
 
 scatter_m2_v3.2 = ggplot(player_table[PA_count >100], 
-                      aes(x = BER_m2_v3, y = RE24_m2_v3, label = player_names)) +
+                      aes(x = BER_m2_v3, y = RE24_m2_v3 / PA_count, label = player_names)) +
   geom_point() + 
   geom_smooth() + 
   geom_text(aes(label = player_names)) +
