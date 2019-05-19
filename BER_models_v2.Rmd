@@ -30,7 +30,7 @@ dt %>% setnames(old = c("Position Before", "Position After",
 ## Load 2018 Data
 ```{r}
 # Load data is hidden for privacy
-head(dt, 20)
+head(dt, 10)
 
 # Make position_before and position_after factors
 dt$position_before = as.factor(dt$position_before)
@@ -40,7 +40,7 @@ dt$position_after = as.factor(dt$position_after)
 dt$league = as.factor(dt$league)
 
 # Transform park_factor to be a percentage above or below 100%
-dt$park_factor = dt$park_factor / 100 - 1
+dt$park_factor = dt$park_factor - 100
 
 # Turn FIP into numeric
 # NOTE: We have some NA FIPs
@@ -57,51 +57,52 @@ dt$max_runs = as.numeric(dt$first_runner != "") +
 # Create Models
 
 ```{r}
-# Basic Model
+# Basic Model (M1)
 # Only position_before effects
 m1 = lm(runs_scored_EOI ~ position_before - 1, data = dt)
 summary(m1)
 # Store results in a table
 m1_table = m1$coefficients %>% 
-  data.table(factor = lapply(names(.), function(s) gsub("position_before", "", s)),
+  data.table(factor = sapply(names(.), function(s) gsub("position_before", "", s)),
              value = .)
   
 
-# League Model
+# League Model (M2)
 # position_before and league
 m2 = lm(runs_scored_EOI ~ position_before + position_before:league - 1 , data = dt)
 summary(m2)
 # Store results in a table
-coef = names(m2$coefficients) %>% 
-  lapply(function(s) gsub("position_before", "", s)) %>%
-  lapply(function(s) gsub(":league", "", s))
-m2_table = m2$coefficients %>% data.table(factor = names(.), value = ., state = coef)
+m2_table = m2$coefficients %>% 
+  data.table(factor = sapply(names(.), function(s) gsub("position_before", "", s)) %>%
+  sapply(function(s) gsub(":league", "", s)), 
+  value = .)
 
 
 
-# Park_factor model
+# Park_factor Model (M3)
 # position_before and park_factor
 m3 = lm(runs_scored_EOI ~ position_before + position_before:park_factor - 1, data = dt)
 summary(m3)
 # Store results in a table
+m3_table = m3$coefficients %>% 
+  data.table(factor = sapply(names(.), function(s) gsub("position_before", "", s)),
+             value = .)
+  
 
-
-# FIP Model
+# FIP Model (M4)
 m4 = lm(runs_scored_EOI ~ position_before + position_before:FIP - 1, data = dt)
 summary(m4)
+# Store results in a table
+m4_table = m4$coefficients %>%
+ data.table(factor = sapply(names(.), function(s) gsub("position_before", "", s)),
+             value = .)
 
 ```
 
 
-# Explore League Factor Model
+# Explore League Factor Model (M2)
 
 ```{r}
-coef = names(m2$coefficients) %>% 
-  lapply(function(s) gsub("position_before", "", s)) %>%
-  lapply(function(s) gsub(":league", "", s))
-
-m2_table = m2$coefficients %>% data.table(factor = names(.), value = ., state = coef)
-
 # Plot all factors
 m2_table %>%
   ggplot(aes(x = as.factor(factor), y = value)) + geom_bar(stat = "identity") + 
@@ -110,14 +111,14 @@ m2_table %>%
 
 # Plot NL and AL factors
 m2_table[1:24, ] %>%
-  ggplot(aes(x = as.factor(factor), y = value)) + geom_bar(stat = "identity") + 
+  ggplot(aes(x = factor, y = value)) + geom_bar(stat = "identity") + 
   theme(axis.text.x = element_text(angle = 90)) +
   ggtitle("League Model Coefficients (all factors)")
 
 data.table(factor = m2_table[1:24,]$factor, 
            AL_value = m2_table[1:24,]$value,
            NL_value = m2_table[1:24,]$value + m2_table[25:48,]$value) %>% 
-  melt() %>% 
+  melt(id.vars = "factor") %>% 
   ggplot(aes(x = factor, y = value, fill = variable)) + 
   geom_bar(position = "dodge", stat = "identity") + 
   theme(axis.text.x = element_text(angle = 90)) +
@@ -141,16 +142,51 @@ data.table(factor = m2_table[1:24,]$factor,
 
 ```
 
+# Explore Park_factor Model (M2)
+```{r}
+# Plot distribution of Park factors
+# Subtracted 100 from all park_factors to get a pure percentage measure
+dt %>% 
+  ggplot(aes(x = park_factor)) + geom_histogram(binwidth = 1) + 
+  ggtitle("Histogram of Park_factors (normalized to 0)")
+
+# Plot M2 base states vs M1 states
+data.table(factor = m1_table$factor,
+           m1_value = m1_table$value,
+           m3_value = m3_table[1:24,]$value) %>%
+  melt(id.vars = "factor") %>%
+  ggplot(aes(x = factor, y = value, fill = variable)) + 
+  geom_bar(position = "dodge", stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) + 
+  ggtitle("Base State Values (M1 and M3)")
+
+# Plot difference between base states for M1 and M3
+data.table(factor = m1_table$factor,
+           m1_value = m1_table$value,
+           m3_value = m3_table[1:24,]$value) %>%
+  ggplot(aes(x = factor, y = m3_value - m1_value)) +
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) + 
+  ggtitle("Difference in Base States (M1 and M3)")
+
+# Plot park_factor adjustments for each state
+m3_table[25:48,] %>% 
+  ggplot(aes(x = factor, y = value)) +
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) + 
+  ggtitle("Park Factor Effects for each state")
+
+```
+
+
 
 # Using models to Calculate BER for players
 
-## Basic Model
+## Basic Model (M1)
 ```{r}
-# Create a value list. Basically a dictionary for faster reference.
-state = sort(unique(dt$position_before))
-m1_vt$state = state
-m1_vl = m1_vt$value
-names(m1_vl) = m1_vt$state
+# Create a value list from m1_table. Basically a dictionary for faster reference.
+m1_vl = m1_table$value
+names(m1_vl) = m1_table$factor
 m1_vl = c(m1_vl, "end inning" = 0)
 
 # Create a condensed data.table
@@ -170,7 +206,7 @@ m1_dt$value_pa = sapply(m1_dt$position_after,
 m1_dt$value_max = m1_dt$max_runs - m1_dt$value_pb + 
   sapply(m1_dt$outs, function(o) switch(o + 1, m1_vl["['0,0,0,0']"], 
                                         m1_vl["['1,0,0,0']"],
-                                        m1_vl["2,0,0,0"]))
+                                        m1_vl["['2,0,0,0']"]))
 
 # Calculate value_created
 m1_dt$value_created = m1_dt$runs_scored + m1_dt$value_pa - m1_dt$value_pb
@@ -179,15 +215,163 @@ m1_dt$BER = m1_dt$value_created / m1_dt$value_max
 
 ```
 
-## League Model
+## League Model (M2)
 ```{r}
-# Create a value list. Basically a dictionary for faster reference.
-state = sort(unique(dt$position_before))
-m2_vt$state = state
-m2_vl = m2_vt$value
-names(m2_vl) = m1_vt$state
-m2_vl = c(m2_vl, "end inning" = 0)
+# Create a value list from m1_table. Basically a dictionary for faster reference.
+m2_vl = m2_table$value
+names(m2_vl) = sapply(m2_table$factor, 
+                      function(s) if_else(grepl("*NL", s), s, paste(s, "AL", sep = "")))
+m2_vl = c(m2_vl, "end inningAL" = 0, "end inningNL" = 0)
+
+# Create a condensed data.table
+m2_dt = dt[, c("res_batter", "PositionBefore_League", "PositionAfter_League",
+               "runs_scored", "max_runs", "runs_scored_EOI", "outs", "league")]
+
+m2_dt$value_pb = sapply(m2_dt$PositionBefore_League, 
+                        function(pb) m2_vl[pb])
+
+m2_dt$value_pa = sapply(m2_dt$PositionAfter_League,
+                        function(pa) m2_vl[pa])
+
+m2_dt$value_max = m2_dt$max_runs - m2_dt$value_pb + 
+  sapply(m2_dt$PositionBefore_League, 
+         function(pb) switch(as.numeric(substr(pb, 3, 3)) + 1,
+                             m2_vl[paste("['0,0,0,0']", substr(pb, 12, 13), sep="")],
+                             m2_vl[paste("['1,0,0,0']", substr(pb, 12, 13), sep="")],
+                             m2_vl[paste("['2,0,0,0']", substr(pb, 12, 13), sep="")]))
+
+# Calculate value_created
+m2_dt$value_created = m2_dt$runs_scored + m2_dt$value_pa - m2_dt$value_pb
+# Calculate BER
+m2_dt$BER = m2_dt$value_created / m2_dt$value_max
+```
+
+
+## Aggregate BER for plays for each model
+```{r}
+# Load player names
+player_name_dt = fread(paste(folder_name, "/Dictionary for Player Names.csv", sep=""), 
+                     col.names = c("res_batter", "player_name"))[order(res_batter)]
+player_list = sort(unique(dt$res_batter))
+
+# Plate appearance counts
+PA_count_table = count(dt, res_batter)
+
+# List of Models of evaluate
+model_list = list(m1_dt, m2_dt)
+
+# Create a list BERs for player from our model_list
+BER_list = list()
+RE24_list = list()
+ggplot_list = list()
+for (i in 1:length(model_list)) {
+  # BER
+  BER_list[[i]] = model_list[[i]] %>% 
+    group_by(res_batter) %>% 
+    summarize(BER_mean = mean(BER))
+  # RE24
+  RE24_list[[i]] = model_list[[i]] %>% 
+    group_by(res_batter) %>% 
+    summarize(RE24 = sum(value_created))
+}
+
+# Aggregate in a table
+player_table = data.table(res_batter = player_name_dt[res_batter %in%
+                                                   player_list]$res_batter,
+                          player_name = player_name_dt[res_batter %in%
+                                                     player_list]$player_name,
+                          PA_count = PA_count_table$n,
+                          BER_m1 = BER_list[[1]]$BER_mean,
+                          BER_m2 = BER_list[[2]]$BER_mean,
+                          RE24_m1 = RE24_list[[1]]$RE24,
+                          RE24_m2 = RE24_list[[2]]$RE24)
+
+```
+
+
+# Plot BER evaluations
+```{r}
+# Model 1 ########################################
+
+# Histogram of BER for all players
+hist_m1.1 = ggplot(player_table, aes(x=BER_m1)) +
+  geom_histogram(binwidth = .005) +
+  ggtitle("Histogram of BER (All PA)[Basic Model]")
+   
+  
+# Histogram of BER for players with > 100 PA
+hist_m1.2 = ggplot(player_table[PA_count > 100], aes(x=BER_m1)) + 
+  geom_histogram(binwidth = .005) +
+  ggtitle("Histogram of BER (PA > 100)[Basic Model]") 
+
+# Plot BER vs RE24 (no labels)
+scatter_m1.1 = ggplot(player_table[PA_count >100], 
+                    aes(x = BER_m1, y = RE24_m1, label = player_name)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") +
+  ggtitle("RE24 vs BER (PA > 100)[Basic Model]")
+
+# Plot BER vs RE24 (labels)
+scatter_m1.2 = ggplot(player_table[PA_count >100], 
+                      aes(x = BER_m1, y = RE24_m1, label = player_name)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_text(aes(label = player_names)) +
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") + 
+  ggtitle("RE24 vs BER (PA > 100)[Basic Model]")
+
+
+# Model 2 ########################################
+hist_m2.1 = ggplot(player_table, aes(x=BER_m2)) +
+  geom_histogram(binwidth = .005) +
+  ggtitle("Histogram of BER (All PA)[League Model]")
+  
+
+hist_m2.2 = ggplot(player_table[PA_count > 100], aes(x=BER_m2)) +
+  geom_histogram(binwidth = .005) + 
+  ggtitle("Histogram of BER (PA > 100)[League Model]")
+
+# Plot BER vs RE24 (no labels)
+scatter_m2.1 = ggplot(player_table[PA_count >100], 
+                    aes(x = BER_m2, y = RE24_m2, label = player_name)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  xlab("BER") +
+  ggtitle("RE24 vs BER (PA > 100)[Basic Model]")
+
+# Plot BER vs RE24 (labels)
+scatter_m2.2 = ggplot(player_table[PA_count >100], 
+                      aes(x = BER_m2, y = RE24_m2, label = player_name)) +
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  geom_text(aes(label = player_name)) +
+  xlab("BER") + 
+  ggtitle("RE24 vs BER (PA > 100)[Basic Model]")
+
+grid.arrange(hist_m1.1, hist_m1.2, scatter_m1.2,
+             hist_m2.1, hist_m2.2, scatter_m2.2,
+             ncol = 3)
+
+
+# Compare M1 and M2
+player_table[PA_count > 100]  %>%
+  ggplot(aes(x = BER_m1, y = BER_m2, label = player_name)) + 
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  geom_text(aes(label = player_name)) +
+  xlab("BER_m1") + ylab("BER_m2")
+  ggtitle("BER_m2 vs BER_m1 (PA > 100)")
 
 
 ```
+
+
+
+
 
