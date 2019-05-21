@@ -12,7 +12,8 @@ library(data.table)
 library(tidyverse)
 library(gridExtra)
 # Make sure folder is correct
-folder_name = "/Users/txl/TXL_R/Final Data"
+#folder_name = "/Users/txl/TXL_R/Final Data"
+folder_name = "~/Final Data"
 dt = fread(paste(folder_name, "/2017dataClean.csv", sep = ""))
 # Rename "Runs Scored till end of inning"
 dt %>% setnames(old = c("Position Before", "Position After",
@@ -233,6 +234,7 @@ m2_dt$value_pb = sapply(m2_dt$PositionBefore_League,
 m2_dt$value_pa = sapply(m2_dt$PositionAfter_League,
                         function(pa) m2_vl[pa])
 
+# Calculate value_max
 m2_dt$value_max = m2_dt$max_runs - m2_dt$value_pb + 
   sapply(m2_dt$PositionBefore_League, 
          function(pb) switch(as.numeric(substr(pb, 3, 3)) + 1,
@@ -244,6 +246,50 @@ m2_dt$value_max = m2_dt$max_runs - m2_dt$value_pb +
 m2_dt$value_created = m2_dt$runs_scored + m2_dt$value_pa - m2_dt$value_pb
 # Calculate BER
 m2_dt$BER = m2_dt$value_created / m2_dt$value_max
+```
+
+## Park_factor Model (M3)
+```{r}
+# Create a value list from m1_table. Basically a dictionary for faster reference.
+m3_vl = m3_table$value
+names(m3_vl) = m3_table$factor
+
+# Create a condensed data.table
+m3_dt = dt[, c("res_batter", "position_before", "position_after",
+               "runs_scored", "max_runs", "runs_scored_EOI", "outs", "park_factor")]
+
+m3_dt$value_pb = sapply(m3_dt$position_before, function(pb) m3_vl[pb]) +
+  sapply(m3_dt$position_before, function(pb) m3_vl[paste0(pb, ":park_factor")]) * 
+  m3_dt$park_factor
+
+m3_dt$value_pa = sapply(m3_dt$position_after, function(pa) m3_vl[pa]) + 
+  sapply(m3_dt$position_after, function(pa) m3_vl[paste0(pa, ":park_factor")]) * 
+  m3_dt$park_factor
+
+# Set end inning position_after = 0
+m3_dt[position_after == "end inning"]$value_pa = 0
+
+m3_dt$value_max = m3_dt$max_runs - m2_dt$value_pb +
+  sapply(m3_dt$position_before,
+         function(pb) switch(as.numeric(substr(pb, 3, 3)) + 1,
+                             m3_vl["['0,0,0,0']"],
+                             m3_vl["['1,0,0,0']"],
+                             m3_vl["['2,0,0,0']"])) +
+  sapply(m3_dt$position_before, 
+         function(pb) switch(as.numeric(substr(pb, 3, 3)) + 1,
+                             m3_vl["['0,0,0,0']:park_factor"],
+                             m3_vl["['1,0,0,0']:park_factor"],
+                             m3_vl["['2,0,0,0']:park_factor"])) *
+  m3_dt$park_factor
+
+# Calculate value_created
+m3_dt$value_created = m3_dt$runs_scored + m3_dt$value_pa - m3_dt$value_pb
+# Calculate BER
+m3_dt$BER = m3_dt$value_created / m3_dt$value_max
+
+
+
+
 ```
 
 
@@ -258,7 +304,7 @@ player_list = sort(unique(dt$res_batter))
 PA_count_table = count(dt, res_batter)
 
 # List of Models of evaluate
-model_list = list(m1_dt, m2_dt)
+model_list = list(m1_dt, m2_dt, m3_dt)
 
 # Create a list BERs for player from our model_list
 BER_list = list()
@@ -283,8 +329,10 @@ player_table = data.table(res_batter = player_name_dt[res_batter %in%
                           PA_count = PA_count_table$n,
                           BER_m1 = BER_list[[1]]$BER_mean,
                           BER_m2 = BER_list[[2]]$BER_mean,
+                          BER_m3 = BER_list[[3]]$BER_mean,
                           RE24_m1 = RE24_list[[1]]$RE24,
-                          RE24_m2 = RE24_list[[2]]$RE24)
+                          RE24_m2 = RE24_list[[2]]$RE24,
+                          RE24_m3 = RE24_list[[3]]$RE24)
 
 ```
 
@@ -368,6 +416,16 @@ player_table[PA_count > 100]  %>%
   xlab("BER_m1") + ylab("BER_m2")
   ggtitle("BER_m2 vs BER_m1 (PA > 100)")
 
+  
+# Compare M1 and M3
+player_table[PA_count > 100]  %>%
+  ggplot(aes(x = BER_m1, y = BER_m3, label = player_name)) + 
+  geom_point() + 
+  geom_smooth() + 
+  geom_smooth(method="lm", color = "red") + 
+  geom_text(aes(label = player_name)) +
+  xlab("BER_m1") + ylab("BER_m3")
+  ggtitle("BER_m2 vs BER_m3 (PA > 100)")  
 
 ```
 
