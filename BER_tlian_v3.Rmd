@@ -1,0 +1,60 @@
+---
+title: "BER_tlian_v3"
+author: "TXL"
+date: "5/24/2019"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(tidyverse)
+library(gridExtra)
+# Make sure folder is correct
+folder_name = "/Users/txl/TXL_R/Final Data"
+#folder_name = "~/Final Data"
+import_season_data = function(year) {
+  dt = fread(paste0(folder_name, "/", as.character(year), "dataClean.csv"))
+  dt %>% setnames(old = c("Position Before", "Position After",
+                        "Runs Scored till end of inning", "Runs_Scored", 
+                        "League", "Park_Factor", "FIP_Pitcher_Control"), 
+                new = c("position_before", "position_after", 
+                        "runs_scored_EOI", "runs_scored", 
+                        "league", "park_factor", "FIP"))
+  return(dt)
+}
+
+```
+
+
+# BER Version 3
+
+We use the following methodology to calculate BERs for a given year.
+1. For year $Y$, aggregate all data in years $[Y-2, Y+2]$ to use in regression model. Calculate across time.
+2. Create a BER table for players for each season
+Note: We have data for years 1975-2018. Easy to start at year 1977, but need to decide what to do with year 2018.
+
+# Aggregate data
+We write a for-loop covering only one year as it will be easily translatable across time. 
+```{r}
+
+years = 2016
+for (y in years) {
+  print(paste("Aggregating data for year:", as.character(y)))
+  datalist = list()
+  for (i in (y-2):(y+2)) {
+    datalist[[i]] = import_season_data(i)
+  }
+  dt = do.call(rbind, datalist) # Aggregate data.table
+  
+  # Now we run the regression model with this data.table
+  m1 = lm(runs_scored_EOI ~ position_before + position_before:league - 1,
+          data = dt)
+}
+
+
+
+
+```
+
+
+

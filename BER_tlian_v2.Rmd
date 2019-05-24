@@ -34,15 +34,17 @@ Load in 2018 data
 # Create column names to fit to CSV imports
 column_names = c("game_id", "visiting_team", "inning", "batting_team_raw",
                  "outs", "balls", "strikes", "vis_score", "home_score",
-                 "res_batter", "res_batter_hand", "res_pitcher", "res_pitcher_hand",
+                 "res_batter", "res_batter_hand", 
+                 "res_pitcher", "res_pitcher_hand",
                  "1b_runner", "2b_runner", "3b_runner", "event_text",
                  "leadoff_flag", "pinchhit_flag", "defensive_position", 
                  "lineup_posiiton", "event_type", "batter_event_flag",
                  "ab_flag", "hit_value", "SH_flag", "SF_flag", "outs_on_play",
                  "RBI_on_play", "wild_pitch_flag", "passed_ball_flag",
                  "num_errors", "batter_dest", "1b_dest", "2b_dest",
-                 "3b_dest", "position_before", "runs_scored", "position_after", 
-                 "runs_scored_EOI", "batting_team", "year", "date", "temperature",
+                 "3b_dest", "position_before", "runs_scored", "position_after",
+                 "runs_scored_EOI", "batting_team", "year", "date",
+                 "temperature",
                  "stadium", "ABvsPitcher", "Rtot", "DefEff", 
                  "1b_speed", "2b_speed", "3b_speed", "FIP", "park_factor")
 
