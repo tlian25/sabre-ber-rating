@@ -13,6 +13,11 @@ library(gridExtra)
 # Source tool functions file
 source("BER_tool_functions.R")
 
+# Set Data and Export Folders
+data_folder = "/Users/txl/TXL_R/Final Data/"
+#data_folder = "~/Final Data/"
+
+export_folder = "./BER_Export_Files/"
 
 
 
@@ -28,10 +33,12 @@ Note: We have data for years 1975-2018. Easy to start at year 1977, but need to 
 
 # Aggregate data
 We write a for-loop covering only one year as it will be easily translatable across time. 
-```{r}
+```{r, eval = F}
+# Lists to store values and player_tables
+vl_list = list()
+pt_list = list()
 
-export_folder = "./BER_Export_Files"
-
+# Year range
 years = 2016
 for (y in years) {
   print(paste("Aggregating data for year:", as.character(y)))
@@ -51,28 +58,83 @@ for (y in years) {
   # Now we run the regression model with this data.table
   # m$reg contains the full linear model
   # m$reg_vl contains the list of values for each state
-  m = calculate_BER_league(dt)
+  m = calculate_BER_value_function(dt)
   
-  BER_dt = calculate_BER(current_year_dt, m$vl)
+  # Calculate BER for each AB with current_year_dt and values
+  BER_dt = calculate_BER_league(current_year_dt, m$vl)
   
+  # Aggregate BER for players
   player_table = create_player_table(BER_dt)
+  
+  # Add values to list
+  player_table$Season = y
+  pt_list[[y]] = player_table
+  
+  m$vl$Season = y
+  vl_list[[y]] = m$vl
   
 
   # Export CSVs
-  # Value list
-  print("Exporting value_list...")
-  write.csv(pt, paste0(export_folder, "/valuelist_", as.character(y), ".csv"))
-  
   print("Exporting BER_dt...")
-  write.csv(BER_dt, paste0(export_folder, "/BER_dt_", as.character(y), ".csv"))
-
-  print("Exporting player_table...")
-  write.csv(player_table, paste0(export_folder, "/player_table_", as.character(y), ".csv"))
- 
-   print(paste0("Successfully exported all tables for year: ", as.character(y)))
+  fwrite(BER_dt, paste0(export_folder, "BER_dt_", as.character(y), ".csv"))
+  print(paste0("Successfully exported all tables for year: ", as.character(y)))
    
 }
 
+vl.all = do.call(rbind, vl_list)
+fwrite(vl.all, paste0(export_folder, "value_function_league.csv"))
+
+pt.all = do.call(rbind, pt_list)
+fwrite(pt.all, paste0(export_folder, "player_table_aggregate.csv"))
+
+
+
+
+```
+
+# Compare Value Functions Across Time
+```{r}
+vl_list = list()
+years = 1977:2016
+for (y in years) {
+  vl = fread(paste0(export_folder, "valuelist_", as.character(y), ".csv"))
+  vl$Season = y
+  vl_list[[y]] = vl
+}
+
+# Aggregate data.table
+vl.all = do.call(rbind, vl_list)
+
+
+```
+
+
+
+# Highest/Lowest BER players for each season
+```{r}
+pt.all = fread(paste0(export_folder, "player_table_aggregate.csv"))
+years = 2010:2016
+for (y in years) {
+  # Subset season, PA > 100
+  season = pt.all[Season == y][PA_count > 100][order(BER, decreasing = T)]
+  print(paste0("Highest BER (PA > 100) in season ", as.character(y)))
+  print(head(season, 5))
+  print(paste0("Lowest BER (PA > 100) in season ", as.character(y)))
+  print(tail(season, 5))
+}
+
+```
+
+# Player Lifetime BERs
+```{r}
+pt.grouped = pt.all %>% group_by(res_batter, player_name) %>%
+  summarize(PA_count = sum(PA_count), BER = mean(BER), RE24 = sum(RE24))
+
+# Lifetime Highest BERs
+print("Lifetime Higest BERs (PA > 100)")
+print(head(pt.grouped %>% 
+             filter(PA_count > 500) %>%
+             arrange(desc(BER)), 50))
 
 
 

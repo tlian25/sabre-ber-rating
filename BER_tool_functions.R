@@ -71,7 +71,7 @@ calculate_BER_value_function = function(dt) {
 #---------------------------------------------------------------
 # Calculate BER for players in a given season
 # Takes a data.table of players and a value_list of BER value functions
-calculate_BER = function(dt, vl) {
+calculate_BER_league = function(dt, vl) {
   print("Calculating a BER_dt from a given value function list...")
   # Create a condensed data.table with BER calculations
   BER_dt = dt[, c("res_batter", "PositionBefore_League", "PositionAfter_League",
