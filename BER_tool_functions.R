@@ -74,7 +74,6 @@ calculate_BER_value_function = function(dt) {
 calculate_BER = function(dt, vl) {
   print("Calculating a BER_dt from a given value function list...")
   # Create a condensed data.table with BER calculations
-  print("Creating BER data.table...")
   BER_dt = dt[, c("res_batter", "PositionBefore_League", "PositionAfter_League",
                   "runs_scored", "max_runs", "runs_scored_EOI", "outs", "league")]
   
