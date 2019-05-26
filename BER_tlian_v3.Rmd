@@ -70,8 +70,7 @@ for (y in years) {
   player_table$Season = y
   pt_list[[y]] = player_table
   
-  m$vl$Season = y
-  vl_list[[y]] = m$vl
+  vl_list[[y]] = m$vl %>% data.table(state = names(.), value = ., Season = y)
   
 
   # Export CSVs
@@ -94,16 +93,8 @@ fwrite(pt.all, paste0(export_folder, "player_table_aggregate.csv"))
 
 # Compare Value Functions Across Time
 ```{r}
-vl_list = list()
-years = 1977:2016
-for (y in years) {
-  vl = fread(paste0(export_folder, "valuelist_", as.character(y), ".csv"))
-  vl$Season = y
-  vl_list[[y]] = vl
-}
-
-# Aggregate data.table
-vl.all = do.call(rbind, vl_list)
+# Load from export folder
+vl = fread(paste0(export_folder, "value_function_league.csv"))
 
 
 ```
