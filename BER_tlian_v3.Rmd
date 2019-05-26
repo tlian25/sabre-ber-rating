@@ -30,7 +30,7 @@ Note: We have data for years 1975-2018. Easy to start at year 1977, but need to 
 We write a for-loop covering only one year as it will be easily translatable across time. 
 ```{r}
 
-export_folder = "./ExportCSV"
+export_folder = "./BER_Export_Files"
 
 years = 2016
 for (y in years) {
@@ -69,19 +69,8 @@ for (y in years) {
   print("Exporting player_table...")
   write.csv(player_table, paste0(export_folder, "/player_table_", as.character(y), ".csv"))
  
-   print("Successfully exported all tables. ")
-  
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+   print(paste0("Successfully exported all tables for year: ", as.character(y)))
+   
 }
 
 
