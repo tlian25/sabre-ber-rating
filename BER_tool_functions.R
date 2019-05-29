@@ -7,20 +7,14 @@ library(tidyverse)
 library(gridExtra)
 
 # Make sure folder is correct
-folder_name = "/Users/txl/TXL_R/Final Data"
+folder_name = "/Users/txl/TXL_R/Final Data/"
 #folder_name = "~/Final Data"
 
 #---------------------------------------------------------------
 # Imports data for a given season
 import_season_data = function(year) {
   print(paste0("Importing Data for Season: ", as.character(year)))
-  dt = fread(paste0(folder_name, "/", as.character(year), "dataClean.csv"))
-  dt %>% setnames(old = c("Position Before", "Position After",
-                          "Runs Scored till end of inning", "Runs_Scored", 
-                          "League", "Park_Factor", "FIP_Pitcher_Control"), 
-                  new = c("position_before", "position_after", 
-                          "runs_scored_EOI", "runs_scored", 
-                          "league", "park_factor", "FIP"))
+  dt = fread(paste0(folder_name, as.character(year), "dataClean.csv"))
   
   # Make position_before and position_after factors
   dt$position_before = as.factor(dt$position_before)
@@ -102,7 +96,7 @@ calculate_BER_league = function(dt, vl) {
 
 #---------------------------------------------------------------
 # Create player table from a given BER_dt
-player_name_dict = fread(paste0(folder_name, "/Dictionary for Player Names.csv"),
+player_name_dict = fread(paste0(folder_name, "Dictionary for Player Names.csv"),
                        col.names = c("res_batter", "player_name"))[order(res_batter)]
 
 create_player_table = function(BER_dt) {

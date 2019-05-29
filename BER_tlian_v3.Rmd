@@ -17,7 +17,18 @@ source("BER_tool_functions.R")
 data_folder = "/Users/txl/TXL_R/Final Data/"
 #data_folder = "~/Final Data/"
 
+
 export_folder = "./BER_Export_Files/"
+# Create export_folder if it does not already exist
+if (!file.exists(export_folder)){
+  print(paste0("Creating export folder: ", export_folder))
+  dir.create(export_folder)
+}
+
+# NEED TO FIX
+# > Average across AB, not seasons
+# > Don't need column name changes
+# > 
 
 
 
@@ -33,13 +44,13 @@ Note: We have data for years 1975-2018. Easy to start at year 1977, but need to 
 
 # Aggregate data
 We write a for-loop covering only one year as it will be easily translatable across time. 
-```{r, eval = F}
+```{r, eval = T, message = F}
 # Lists to store values and player_tables
 vl_list = list()
 pt_list = list()
 
 # Year range
-years = 2016
+years = 1977:2016
 for (y in years) {
   print(paste("Aggregating data for year:", as.character(y)))
   datalist = list()
@@ -95,6 +106,36 @@ fwrite(pt.all, paste0(export_folder, "player_table_aggregate.csv"))
 ```{r}
 # Load from export folder
 vl = fread(paste0(export_folder, "value_function_league.csv"))
+vl$league = if_else(grepl("*NL", vl$state), "NL", "AL")
+vl$state_raw = str_replace(vl$state, ".L$", "")
+
+# States across years
+vl %>% 
+  ggplot(aes(x = Season, y = value, group = state)) + 
+  geom_line(aes(color = state)) + 
+  ggtitle("Value of States across years")
+
+# NL States across years
+vl[grepl("*NL", state)] %>% 
+  ggplot(aes(x = Season, y = value, group = state)) + 
+  geom_line(aes(color = state)) + 
+  ggtitle("Value of NL States across years")
+
+# AL States across years
+vl[grepl("*AL", state)] %>%
+  ggplot(aes(x = Season, y = value, group = state)) + 
+  geom_line(aes(color = state)) + 
+  ggtitle("Value of AL States across years")
+
+# Plot range of states 
+
+vl %>%
+  ggplot(aes(x = state, y = value)) + geom_boxplot(aes(color = league)) + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("League Model Coefficients (all factors)")
+
+
+
 
 
 ```
