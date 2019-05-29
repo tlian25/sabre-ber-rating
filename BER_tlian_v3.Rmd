@@ -25,17 +25,24 @@ if (!file.exists(export_folder)){
   dir.create(export_folder)
 }
 
-# NEED TO FIX
-# > Average across AB, not seasons
-# > Don't need column name changes
-# > 
-
-
-
 ```
 
 
 # BER Version 3
+
+### TO-DO LIST:
+* Average across AB, not seasons
+* Don't need column name changes
+* Cluster on half-innings
+* Cluster on games
+* Split data by league?
+* Compare our measure vs other measures in predicting salary/persistence, etc
+* Incremental improve over RE24?
+* Controlled for factors (RE24 does not)
+* Standardization
+* (Park_factor-100) * 24states
+* FIP * 24states
+* 
 
 We use the following methodology to calculate BERs for a given year.
 1. For year $Y$, aggregate all data in years $[Y-2, Y+2]$ to use in regression model. Calculate across time.
@@ -91,9 +98,11 @@ for (y in years) {
    
 }
 
+# Export value functions across all seasons
 vl.all = do.call(rbind, vl_list)
 fwrite(vl.all, paste0(export_folder, "value_function_league.csv"))
 
+# Export player BERs across all seasons
 pt.all = do.call(rbind, pt_list)
 fwrite(pt.all, paste0(export_folder, "player_table_aggregate.csv"))
 
@@ -142,7 +151,7 @@ vl %>%
 
 
 
-# Highest/Lowest BER players for each season
+# Highest BER players for each season
 ```{r}
 pt.all = fread(paste0(export_folder, "player_table_aggregate.csv"))
 years = 2010:2016
@@ -151,16 +160,20 @@ for (y in years) {
   season = pt.all[Season == y][PA_count > 100][order(BER, decreasing = T)]
   print(paste0("Highest BER (PA > 100) in season ", as.character(y)))
   print(head(season, 5))
-  print(paste0("Lowest BER (PA > 100) in season ", as.character(y)))
-  print(tail(season, 5))
 }
 
 ```
 
 # Player Lifetime BERs
 ```{r}
+# Load Data
+pt.all = fread(paste0(export_folder, "player_table_aggregate.csv"))
+# Create a weighted BER total for each season
+pt.all$weighted_sum_BER = pt.all$PA_count * pt.all$BER
+# Group by player
 pt.grouped = pt.all %>% group_by(res_batter, player_name) %>%
-  summarize(PA_count = sum(PA_count), BER = mean(BER), RE24 = sum(RE24))
+  summarize(PA_count = sum(PA_count), BER = sum(weighted_sum_BER)/sum(PA_count), 
+            RE24 = sum(RE24))
 
 # Lifetime Highest BERs
 print("Lifetime Higest BERs (PA > 100)")
