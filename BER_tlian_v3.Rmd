@@ -6,9 +6,12 @@ output: html_document
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 999)
 library(data.table)
 library(tidyverse)
 library(gridExtra)
+library(multiwayvcov)
+
 
 # Source tool functions file
 source("BER_tool_functions.R")
@@ -28,21 +31,17 @@ if (!file.exists(export_folder)){
 ```
 
 
-# BER Version 3
 
-### TO-DO LIST:
-* Average across AB, not seasons
-* Don't need column name changes
+### NOTES/TO-DO:
 * Cluster on half-innings
-* Cluster on games
-* Split data by league?
 * Compare our measure vs other measures in predicting salary/persistence, etc
 * Incremental improve over RE24?
 * Controlled for factors (RE24 does not)
 * Standardization
 * (Park_factor-100) * 24states
 * FIP * 24states
-* 
+
+# BER Version 3
 
 We use the following methodology to calculate BERs for a given year.
 1. For year $Y$, aggregate all data in years $[Y-2, Y+2]$ to use in regression model. Calculate across time.
@@ -55,6 +54,7 @@ We write a for-loop covering only one year as it will be easily translatable acr
 # Lists to store values and player_tables
 vl_list = list()
 pt_list = list()
+coef_list = list()
 
 # Year range
 years = 1977:2016
@@ -76,10 +76,10 @@ for (y in years) {
   # Now we run the regression model with this data.table
   # m$reg contains the full linear model
   # m$reg_vl contains the list of values for each state
-  m = calculate_BER_value_function(dt)
+  m = calculate_BER_value_function_league_pf_fip(dt)
   
   # Calculate BER for each AB with current_year_dt and values
-  BER_dt = calculate_BER_league(current_year_dt, m$vl)
+  BER_dt = calculate_BER_league_pf_fip(current_year_dt, m$vl)
   
   # Aggregate BER for players
   player_table = create_player_table(BER_dt)
@@ -88,8 +88,11 @@ for (y in years) {
   player_table$Season = y
   pt_list[[y]] = player_table
   
+  # Add values to value_list
   vl_list[[y]] = m$vl %>% data.table(state = names(.), value = ., Season = y)
   
+  # Add coefficients and clustered se to list
+  coef_list[[y]] = m$coef.se 
 
   # Export CSVs
   print("Exporting BER_dt...")
@@ -100,12 +103,15 @@ for (y in years) {
 
 # Export value functions across all seasons
 vl.all = do.call(rbind, vl_list)
-fwrite(vl.all, paste0(export_folder, "value_function_league.csv"))
+fwrite(vl.all, paste0(export_folder, "values_league_pf_fip.csv"))
 
 # Export player BERs across all seasons
 pt.all = do.call(rbind, pt_list)
-fwrite(pt.all, paste0(export_folder, "player_table_aggregate.csv"))
+fwrite(pt.all, paste0(export_folder, "player_table_league_pf_fip.csv"))
 
+# Export raw coefficients and clustered SEs
+coef.all = do.call(rbind, coef_list)
+fwrite(coef.all, paste0(export_folder, "raw_coef_se_league_pf_fip.csv"))
 
 
 
@@ -114,7 +120,7 @@ fwrite(pt.all, paste0(export_folder, "player_table_aggregate.csv"))
 # Compare Value Functions Across Time
 ```{r}
 # Load from export folder
-vl = fread(paste0(export_folder, "value_function_league.csv"))
+vl = fread(paste0(export_folder, "values_league_pf_fip.csv"))
 vl$league = if_else(grepl("*NL", vl$state), "NL", "AL")
 vl$state_raw = str_replace(vl$state, ".L$", "")
 
@@ -153,13 +159,13 @@ vl %>%
 
 # Highest BER players for each season
 ```{r}
-pt.all = fread(paste0(export_folder, "player_table_aggregate.csv"))
-years = 2010:2016
+pt.all = fread(paste0(export_folder, "player_table_league_pf_fip.csv"))
+years = 2015:2016
 for (y in years) {
   # Subset season, PA > 100
   season = pt.all[Season == y][PA_count > 100][order(BER, decreasing = T)]
   print(paste0("Highest BER (PA > 100) in season ", as.character(y)))
-  print(head(season, 5))
+  print(head(season, 10))
 }
 
 ```
