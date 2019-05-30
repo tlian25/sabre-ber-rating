@@ -17,8 +17,8 @@ library(multiwayvcov)
 source("BER_tool_functions.R")
 
 # Set Data and Export Folders
-data_folder = "/Users/txl/TXL_R/Final Data/"
-#data_folder = "~/Final Data/"
+#data_folder = "/Users/txl/TXL_R/Final Data/"
+data_folder = "~/Final Data/"
 
 
 export_folder = "./BER_Export_Files/"
@@ -174,7 +174,7 @@ for (y in years) {
 # Player Lifetime BERs
 ```{r}
 # Load Data
-pt.all = fread(paste0(export_folder, "player_table_aggregate.csv"))
+pt.all = fread(paste0(export_folder, "player_table_league_pf_fip.csv"))
 # Create a weighted BER total for each season
 pt.all$weighted_sum_BER = pt.all$PA_count * pt.all$BER
 # Group by player

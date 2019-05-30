@@ -8,8 +8,8 @@ library(gridExtra)
 library(multiwayvcov)
 
 # Make sure folder is correct
-folder_name = "/Users/txl/TXL_R/Final Data/"
-#folder_name = "~/Final Data"
+#folder_name = "/Users/txl/TXL_R/Final Data/"
+folder_name = "~/Final Data/"
 
 #---------------------------------------------------------------
 # Imports data for a given season
@@ -20,7 +20,7 @@ import_season_data = function(year) {
   # Make position_before and position_after factors
   dt$position_before = as.factor(dt$position_before)
   dt$position_after = as.factor(dt$position_after)
-  
+
   # Make league a factor
   dt$league = as.factor(dt$league)
   
@@ -149,7 +149,7 @@ calculate_BER_value_function_league_pf_fip = function(dt) {
 calculate_BER_league_pf_fip = function(dt, vl) {
   print("Calculating a BER_dt from a given value function list...")
   # Create a condensed data.table with BER calculations
-  BER_dt = dt[, c("res_batter", "position_before", 
+  BER_dt = dt[, c("res_batter", "position_before","position_after", 
                   "PositionBefore_League", "PositionAfter_League",
                   "runs_scored", "max_runs", "runs_scored_EOI", "outs", "league", 
                   "park_factor", "FIP")]
@@ -160,14 +160,25 @@ calculate_BER_league_pf_fip = function(dt, vl) {
   BER_dt$value_pa = sapply(BER_dt$PositionAfter_League,
                            function(pa) vl[pa])
   
-  BER_dt$value_PF = BER_dt$park_factor * 
+  # Park_factor for position_before
+  BER_dt$value_PF_pb = BER_dt$park_factor * 
     sapply(BER_dt$position_before, function(pb) vl[paste0(pb, ":park_factor")]) 
   
-  BER_dt$value_FIP = BER_dt$FIP * 
+  # Park_factor for position_after
+  BER_dt$value_PF_pa = BER_dt$park_factor * 
+    sapply(BER_dt$position_after, function(pa) vl[paste0(pa, ":park_factor")]) 
+  
+  # FIP for position_before
+  BER_dt$value_FIP_pb = BER_dt$FIP * 
     sapply(BER_dt$position_before, function(pb) vl[paste0(pb, ":FIP")])
   
-  # Calculate  value_max
-  BER_dt$value_max = BER_dt$max_runs - BER_dt$value_pb + 
+  # FIP for position_after
+  BER_dt$value_FIP_pa = BER_dt$FIP * 
+    sapply(BER_dt$position_after, function(pa) vl[paste0(pa, ":FIP")])
+  
+  # Calculate value_max
+  BER_dt$value_max = BER_dt$max_runs - BER_dt$value_pb -
+    BER_dt$value_PF_pb - BER_dt$value_FIP_pb +
     sapply(BER_dt$PositionBefore_League,
            function(pb) switch(as.numeric(substr(pb, 3, 3)) + 1,
                                vl[paste0("['0,0,0,0']", substr(pb, 12, 13))],
@@ -185,8 +196,10 @@ calculate_BER_league_pf_fip = function(dt, vl) {
                                vl["['2,0,0,0']:FIP"])) * BER_dt$FIP
   
   # Calculate value_created
-  BER_dt$value_created = BER_dt$runs_scored + BER_dt$value_pa - BER_dt$value_pb + 
-    BER_dt$value_PF + BER_dt$value_FIP
+  BER_dt$value_created = BER_dt$runs_scored + 
+    BER_dt$value_pa - BER_dt$value_pb + 
+    BER_dt$value_PF_pa - BER_dt$value_PF_pb + 
+    BER_dt$value_FIP_pa - BER_dt$value_FIP_pb
   
   # Calculate BER
   BER_dt$BER = BER_dt$value_created / BER_dt$value_max
