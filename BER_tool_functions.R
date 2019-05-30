@@ -53,8 +53,12 @@ calculate_BER_value_function_league = function(dt) {
   summary(reg)
   
   # Cluster SEs on half-innings
+  print("Clustering on half-innings...")
   clust = cluster.vcov(reg, cluster = dt$Half_Inning)
-  coef.se = cbind(coef = reg$coefficients, se.clust = sqrt(diag(clust)))
+  coef.se = data.table(state = names(reg$coefficients),
+                       coef = reg$coefficients, 
+                       se = coef(summary(reg))[, "Std. Error"],
+                       se.clust = sqrt(diag(clust)))
   
   vl = reg$coefficients 
   names(vl) = names(reg$coefficients) %>%
@@ -117,9 +121,12 @@ calculate_BER_value_function_league_pf_fip = function(dt) {
            data = dt)
   
   # Cluster SEs on half-innings
-  print("Clustering on half-innings")
+  print("Clustering on half-innings...")
   clust = cluster.vcov(reg, cluster = dt$Half_Inning)
-  coef.se = data.table(coef = reg$coefficients, se.clust = sqrt(diag(clust)))
+  coef.se = data.table(state = names(reg$coefficients),
+                       coef = reg$coefficients, 
+                       se = coef(summary(reg))[, "Std. Error"],
+                       se.clust = sqrt(diag(clust)))
   
   summary(reg)
   vl = reg$coefficients 

@@ -92,6 +92,7 @@ for (y in years) {
   vl_list[[y]] = m$vl %>% data.table(state = names(.), value = ., Season = y)
   
   # Add coefficients and clustered se to list
+  m$coef.se$year = y
   coef_list[[y]] = m$coef.se 
 
   # Export CSVs
