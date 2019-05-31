@@ -70,7 +70,8 @@ calculate_BER_value_function_league = function(dt) {
   # Add base states to NL adjustments for total NL effect
   vl[25:48] = vl[1:24] + vl[25:48]
   # Add values of 0 for end inning states
-  vl = c(vl, "end inningAL" = 0, "end inningNL" = 0)
+  vl = c(vl, "end inningAL" = 0, "end inningNL" = 0, "end inning" = 0, 
+         "end inning:park_factor" = 0, "end inning:FIP" = 0)
   
   return(list("reg" = reg, "vl" = vl, "coef.se" = coef.se))
   
@@ -138,7 +139,8 @@ calculate_BER_value_function_league_pf_fip = function(dt) {
   # Add base states to NL adjustments for total NL effect
   vl[25:48] = vl[1:24] + vl[25:48]
   # Add values of 0 for end inning states
-  vl = c(vl, "end inningAL" = 0, "end inningNL" = 0)
+  vl = c(vl, "end inningAL" = 0, "end inningNL" = 0, "end inning" = 0, 
+         "end inning:park_factor" = 0, "end inning:FIP" = 0)
   
   return(list("reg" = reg, "vl" = vl, "coef.se" = coef.se))
 }
