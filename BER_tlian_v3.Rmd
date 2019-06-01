@@ -1,7 +1,6 @@
 ---
 title: "BER_tlian_v3"
 author: "TXL"
-date: "5/24/2019"
 output: html_document
 ---
 ```{r setup, include=FALSE}
@@ -16,13 +15,18 @@ library(multiwayvcov)
 # Source tool functions file
 source("BER_tool_functions.R")
 
-# Set Data and Export Folders
-#data_folder = "/Users/txl/TXL_R/Final Data/"
-data_folder = "~/Final Data/"
+# Make sure folder is correct and exists
+possible_folders = c("/Users/txl/TXL_R/Final Data/",
+                     "~/Final Data/")
+folder_name = ""
+for (f in possible_folders) {
+  if (dir.exists(f)) {folder_name = f}
+}
+print(paste0("Folder name: ", folder_name))
 
 
-export_folder = "./BER_Export_Files/"
 # Create export_folder if it does not already exist
+export_folder = "./BER_Export_Files/"
 if (!file.exists(export_folder)){
   print(paste0("Creating export folder: ", export_folder))
   dir.create(export_folder)

@@ -7,9 +7,14 @@ library(tidyverse)
 library(gridExtra)
 library(multiwayvcov)
 
-# Make sure folder is correct
-#folder_name = "/Users/txl/TXL_R/Final Data/"
-folder_name = "~/Final Data/"
+# Make sure folder is correct and exists
+possible_folders = c("/Users/txl/TXL_R/Final Data/",
+                     "~/Final Data/")
+folder_name = ""
+for (f in possible_folders) {
+  if (dir.exists(f)) {folder_name = f}
+}
+print(paste0("Folder name: ", folder_name))
 
 #---------------------------------------------------------------
 # Imports data for a given season
@@ -29,9 +34,11 @@ import_season_data = function(year) {
   
   # Turn FIP into numeric
   # NOTE: We have some NA FIPs
-  # Cap fip at 16. 
+  # Cap fip at 16 and zero-mean
   dt$FIP = as.numeric(dt$FIP)
   dt[FIP > 16]$FIP = 16
+  dt$FIP = dt$FIP - mean(dt$FIP)
+  
   
   # Calculate max_runs possible scored
   dt$max_runs = as.numeric(dt$first_runner != "") + 
