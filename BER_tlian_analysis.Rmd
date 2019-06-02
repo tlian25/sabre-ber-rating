@@ -1,0 +1,229 @@
+---
+title: "BER_tlian_analysis"
+author: "TXL"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 999)
+require(data.table)
+require(tidyverse)
+
+# Source tool functions file
+source("BER_tool_functions.R")
+
+# Export folder where outputs are located
+export_folder = "./BER_Export_Files/"
+
+
+```
+
+# Explorations and Analysis of Value Functions
+
+
+## Values of States
+
+We import the value functions calculated in **BER_tlian_v3.Rmd**.
+
+```{r}
+# Import value functions
+vl = fread(paste0(export_folder, "values_league_pf_fip.csv"))
+# Remove end inning states as those are always 0
+vl = vl[!grepl("end*", state)]
+
+# League variable, NL, AL, or FIP or park_factor
+vl$league = vl$state %>% sapply(function(s) if_else(grepl("*L$", s), substr(s, 12, 13), "NA")) 
+vl[league == 'NA']$league = vl[league == 'NA']$state %>% 
+  sapply(function(s) if_else(grepl("*FIP", s), "FIP", "park_factor")) 
+
+# Base states
+vl$base_state = substr(vl$state, 1, 11)
+
+# Plot over years only base states.
+vl[grepl("*L$", state)] %>% 
+  ggplot(aes(x = season, y = value, color = state)) +
+  geom_line() + 
+  ggtitle("Values of states over time")
+
+# Plot range of values for each state
+vl[league != "NA"] %>% 
+  ggplot(aes(x = state, y = value, color = league)) + 
+  geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Boxplot of values for each state")
+
+
+```
+
+Here we clearly see there is some persistence over years, but for higher value states, we see much more variation in expected value. This makes intuitive sense as states are lower bounded by zero and there are much more possibilities in the outcome for states where more players are on bases. We note that all state values seem to be boosted in the early 2000s, possibly with the widespread use of PEDs in those seasons. This affirms our decision to calculate different value functions for each season as a weighted average of the two seasons prior and two seasons after. Clearly, the game and player performance are constantly changing over time, though the relative value of states in comparison to each other persist over time. 
+
+From here on out, we consider the base states with a average value of the two leagues in comparing the base states to the interaction of FIP and park_factor
+```{r}
+# Combined data.table of summary by state, FIP, and park_factor
+vl_combined = rbind(vl[grepl("*L$", state)] %>% group_by(base_state) %>%
+  summarize(mean = mean(value), sigma = sd(value)) %>% 
+    data.table(., s = "base"),
+  vl[grepl("*FIP", state)] %>% group_by(base_state) %>% 
+    summarize(mean = mean(value), sigma = sd(value)) %>% 
+    data.table(., s = "FIP"),
+  vl[grepl("*park", state)] %>% group_by(base_state) %>%
+    summarize(mean = mean(value), sigma = sd(value)) %>% 
+    data.table(., s = "park_factor"))
+
+
+```
+
+
+
+```{r}
+# Plot standard deviations of each state
+vl[league != "NA"] %>% group_by(state, league) %>% 
+  summarize(sigma = sd(value)) %>%
+  ggplot(aes(x = state, y = sigma,  fill = league)) + 
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Std Dev for each state")
+
+vl[league != "NA"] %>% group_by(state, league) %>% 
+  summarize(sigma_div_mean = sd(value) / mean(value)) %>%
+  ggplot(aes(x = state, y = sigma_div_mean,  fill = league)) + 
+  geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Std Dev / Mean for each state")
+
+vl[league != "NA"] %>% group_by(state, league) %>%
+  summarize(mean = mean(value), sigma = sd(value)) %>%
+  ggplot(aes(x = mean, y = sigma, color = league, label = state)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text(aes(label=state),hjust=0, vjust=0) + 
+  ggtitle("Std Dev vs Mean for each state")
+
+
+```
+
+Here we look at the relationship of variance to averages for our 24 states. In our first graph, we purely look at standard deviations and see what sees to be big differences between the two leagues. In the second graph, we divide the sigmas by the averages for each state to arrive more at a percentage measure. We see there is much more similarity between the leagues and states once controlling for means. We see that in most states, AL states have slightly greater variation than their NL counterparts. The scatter plots relates the sigma and mean of states together, showing there is indeed a tight positive linear relationship between sigma and mean for states. 
+
+
+## Interaction of states with park_factor and FIP
+
+```{r}
+# Park_factor
+vl[grepl("*:park", state)] %>% 
+  ggplot(aes(x = season, y = value, color = state)) + 
+  geom_line() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Value of park_factor interactions across seasons")
+
+vl[grepl("*:park", state)] %>% group_by(state) %>%
+  summarize(value = mean(value)) %>%
+  ggplot(aes(x = state, y = value)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Average values for park_factor interactions")
+
+vl[grepl("*park", state)] %>% 
+  ggplot(aes(x = state, y = value)) +
+  geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Range of values for park_factor interactions")
+
+vl[grepl("*park", state)] %>% group_by(state) %>%
+  summarize(mean = mean(value), sigma = sd(value)) %>%
+  ggplot(aes(x = mean, y = sigma)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text(aes(label=state),hjust=0, vjust=0) + 
+  ggtitle("Std Dev vs Mean for each state")
+  
+data.table(state = vl_combined[s == "base"]$base_state, 
+           base_value = vl_combined[s == "base"]$mean,
+           park_value = vl_combined[s == "park_factor"]$mean) %>%
+  ggplot(aes(x = base_value, y = park_value, label = state)) + 
+  geom_point() + geom_text(aes(label=state),hjust=0, vjust=0) + 
+  geom_smooth(method = "lm") + 
+  ggtitle("Park interaction value vs base value")
+
+```
+
+We see there doesn't seem to be much persistence or pattern of the influence of park_factor on our base 24 states. Over time, the interaction value varies quite a bit, although it does seem to be significantly different from 0. We note that for most states over most years, this interaction factor is above 0. 
+
+Looking at the boxplot of value ranges, we see that for some states, park factor doesn't seem to vary at all while for some states it varies greatly. Notably, park factor seems to have the most interaction effect in states with 0 outs, likely because of the greater possibility of scoring more runs until end of inning in those states. Furthermore, park factor has greater variance and greater value with higher valued base states. In general we see a magnifying effect for park factor. A large park value factor affects higher valued states (amplify or dampen) more than it does a lower valued state. 
+
+## FIP effects
+
+```{r}
+# FIP
+vl[grepl("*:FIP", state)] %>% 
+  ggplot(aes(x = season, y = value, color = state)) + 
+  geom_line() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Value of FIP interactions across seasons")
+
+vl[grepl("*:FIP", state)] %>% group_by(state) %>%
+  summarize(value = mean(value)) %>%
+  ggplot(aes(x = state, y = value)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Average values for FIP interactions")
+
+vl[grepl("*FIP", state)] %>% 
+  ggplot(aes(x = state, y = value)) +
+  geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Range of values for FIP interactions")
+
+vl[grepl("*FIP", state)] %>% group_by(state) %>%
+  summarize(mean = mean(value), sigma = sd(value)) %>%
+  ggplot(aes(x = mean, y = sigma)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_text(aes(label=state),hjust=0, vjust=0) + 
+  ggtitle("Std Dev vs Mean for each state")
+  
+data.table(state = vl_combined[s == "base"]$base_state, 
+           base_value = vl_combined[s == "base"]$mean,
+           fip_value = vl_combined[s == "FIP"]$mean) %>%
+  ggplot(aes(x = base_value, y = fip_value, label = state)) + 
+  geom_point() + geom_text(aes(label=state),hjust=0, vjust=0) + 
+  geom_smooth(method = "lm") + 
+  ggtitle("FIP interaction value vs base value")
+
+
+```
+
+We see many of the same characteristics of FIP interaction that we do in park factor interaction. The relationships between variance and mean of values, variance and values of base states, and amplifying/dampening effect also hold true with FIP. 
+
+
+## Wald Test
+
+We run four separate Wald Tests:
+1. Test if betas for base states = 0
+2. Test if league betas for states = 0
+3. Test if park_factor interaction betas = 0
+4. Test if FIP interaction betas = 0
+
+```{r,echo=F}
+#To-Do
+
+# Load in raw coefficients and stderrs from regressions
+coef = fread(paste0(export_folder, "raw_coef_se_league_pf_fip.csv"))
+
+# Run a loop for each year
+for (y in 1977:1977) {
+  coef_year = coef[season == y]
+  B = coef_year[1:24, ]$coef
+
+  
+}
+
+
+B <- clean.betas
+V <- clean.covar
+R <- matrix(c(0,0,0,0,0,1,1),1,7,byrow = T)
+r <- matrix(0,1,1)
+
+wald.stat <- t(R%*%B-r)%*%inv(R%*%V%*%t(R))%*%(R%*%B-r) #Calculating wald statistic
+wald.pvalue <- pchisq(wald.stat,1,lower.tail = FALSE) #Determining the p-value for the above wald statistic
+```

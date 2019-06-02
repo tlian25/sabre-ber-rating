@@ -59,6 +59,7 @@ We write a for-loop covering only one year as it will be easily translatable acr
 vl_list = list()
 pt_list = list()
 coef_list = list()
+covar_list = list()
 
 # Year range
 years = 1977:2016
@@ -89,15 +90,17 @@ for (y in years) {
   player_table = create_player_table(BER_dt)
   
   # Add values to list
-  player_table$Season = y
+  player_table$season = y
   pt_list[[y]] = player_table
   
   # Add values to value_list
-  vl_list[[y]] = m$vl %>% data.table(state = names(.), value = ., Season = y)
+  vl_list[[y]] = m$vl %>% data.table(state = names(.), value = ., season = y)
   
   # Add coefficients and clustered se to list
-  m$coef.se$year = y
+  m$coef.se$season = y
   coef_list[[y]] = m$coef.se 
+  
+  covar_list[[y]] = data.table(m$covar.mat, season = y)
 
   # Export CSVs
   print("Exporting BER_dt...")
@@ -118,6 +121,8 @@ fwrite(pt.all, paste0(export_folder, "player_table_league_pf_fip.csv"))
 coef.all = do.call(rbind, coef_list)
 fwrite(coef.all, paste0(export_folder, "raw_coef_se_league_pf_fip.csv"))
 
+covar.all = do.call(rbind, covar_list)
+fwrite(covar.all, paste0(export_folder, "covar_league_pf_fip.csv"))
 
 
 ```
@@ -131,19 +136,19 @@ vl$state_raw = str_replace(vl$state, ".L$", "")
 
 # States across years
 vl %>% 
-  ggplot(aes(x = Season, y = value, group = state)) + 
+  ggplot(aes(x = season, y = value, group = state)) + 
   geom_line(aes(color = state)) + 
   ggtitle("Value of States across years")
 
 # NL States across years
 vl[grepl("*NL", state)] %>% 
-  ggplot(aes(x = Season, y = value, group = state)) + 
+  ggplot(aes(x = season, y = value, group = state)) + 
   geom_line(aes(color = state)) + 
   ggtitle("Value of NL States across years")
 
 # AL States across years
 vl[grepl("*AL", state)] %>%
-  ggplot(aes(x = Season, y = value, group = state)) + 
+  ggplot(aes(x = season, y = value, group = state)) + 
   geom_line(aes(color = state)) + 
   ggtitle("Value of AL States across years")
 

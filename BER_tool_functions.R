@@ -4,7 +4,6 @@
 # A file of useful tools for calculating BER project
 library(data.table)
 library(tidyverse)
-library(gridExtra)
 library(multiwayvcov)
 
 # Make sure folder is correct and exists
@@ -80,7 +79,7 @@ calculate_BER_value_function_league = function(dt) {
   vl = c(vl, "end inningAL" = 0, "end inningNL" = 0, "end inning" = 0, 
          "end inning:park_factor" = 0, "end inning:FIP" = 0)
   
-  return(list("reg" = reg, "vl" = vl, "coef.se" = coef.se))
+  return(list("reg" = reg, "vl" = vl, "coef.se" = coef.se, "covar.mat" = clust))
   
   
 }
@@ -130,6 +129,7 @@ calculate_BER_value_function_league_pf_fip = function(dt) {
   
   # Cluster SEs on half-innings
   print("Clustering on half-innings...")
+  # Cluster covariance
   clust = cluster.vcov(reg, cluster = dt$Half_Inning)
   coef.se = data.table(state = names(reg$coefficients),
                        coef = reg$coefficients, 
@@ -149,7 +149,7 @@ calculate_BER_value_function_league_pf_fip = function(dt) {
   vl = c(vl, "end inningAL" = 0, "end inningNL" = 0, "end inning" = 0, 
          "end inning:park_factor" = 0, "end inning:FIP" = 0)
   
-  return(list("reg" = reg, "vl" = vl, "coef.se" = coef.se))
+  return(list("reg" = reg, "vl" = vl, "coef.se" = coef.se, "covar.mat" = clust))
 }
 
 #---------------------------------------------------------------
