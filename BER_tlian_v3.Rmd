@@ -100,6 +100,7 @@ for (y in years) {
   m$coef.se$season = y
   coef_list[[y]] = m$coef.se 
   
+  # Add clustered covariance matrix to list
   covar_list[[y]] = data.table(m$covar.mat, season = y)
 
   # Export CSVs
@@ -121,6 +122,7 @@ fwrite(pt.all, paste0(export_folder, "player_table_league_pf_fip.csv"))
 coef.all = do.call(rbind, coef_list)
 fwrite(coef.all, paste0(export_folder, "raw_coef_se_league_pf_fip.csv"))
 
+# Export clustered covariance matrix
 covar.all = do.call(rbind, covar_list)
 fwrite(covar.all, paste0(export_folder, "covar_league_pf_fip.csv"))
 
