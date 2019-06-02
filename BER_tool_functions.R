@@ -8,7 +8,8 @@ library(multiwayvcov)
 
 # Make sure folder is correct and exists
 possible_folders = c("/Users/txl/TXL_R/Final Data/",
-                     "~/Final Data/")
+                     "~/Final Data/",
+                     "C:/Users/TXL/Documents/SportsAnalyticsData/Final Data/")
 folder_name = ""
 for (f in possible_folders) {
   if (dir.exists(f)) {folder_name = f}

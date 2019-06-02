@@ -78,21 +78,21 @@ vl_combined = rbind(vl[grepl("*L$", state)] %>% group_by(base_state) %>%
 
 ```{r}
 # Plot standard deviations of each state
-vl[league != "NA"] %>% group_by(state, league) %>% 
+vl[grepl("*L$", league)] %>% group_by(state, league) %>% 
   summarize(sigma = sd(value)) %>%
   ggplot(aes(x = state, y = sigma,  fill = league)) + 
   geom_bar(stat = "identity") + 
   theme(axis.text.x = element_text(angle = 90)) +
   ggtitle("Std Dev for each state")
 
-vl[league != "NA"] %>% group_by(state, league) %>% 
+vl[grepl("*L$", league)] %>% group_by(state, league) %>% 
   summarize(sigma_div_mean = sd(value) / mean(value)) %>%
   ggplot(aes(x = state, y = sigma_div_mean,  fill = league)) + 
   geom_bar(stat = "identity") + 
   theme(axis.text.x = element_text(angle = 90)) +
   ggtitle("Std Dev / Mean for each state")
 
-vl[league != "NA"] %>% group_by(state, league) %>%
+vl[grepl("*L$", league)] %>% group_by(state, league) %>%
   summarize(mean = mean(value), sigma = sd(value)) %>%
   ggplot(aes(x = mean, y = sigma, color = league, label = state)) + 
   geom_point() + 
@@ -210,11 +210,17 @@ We run four separate Wald Tests:
 # Load in raw coefficients and stderrs from regressions
 coef = fread(paste0(export_folder, "raw_coef_se_league_pf_fip.csv"))
 
+# Load in covariance matrices
+covar = fread(paste0(export_folder, "covar_league_pf_fip.csv"))
+
 # Run a loop for each year
 for (y in 1977:1977) {
   coef_year = coef[season == y]
+  V = as.matrix(covar[season == y][, -c("season")])
+  rownames(V) = colnames(V)
   B = coef_year[1:24, ]$coef
-
+        
+  
   
 }
 
