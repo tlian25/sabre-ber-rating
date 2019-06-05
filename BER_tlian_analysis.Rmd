@@ -21,6 +21,12 @@ export_folder = "./BER_Export_Files/"
 
 # Explorations and Analysis of Value Functions
 
+To-Do:
+
+* Regress PA_count vs BER
+* Lag BER for persistence measure
+* Salary vs BER
+* 
 
 ## Values of States
 
@@ -47,7 +53,7 @@ vl[grepl("*L$", state)] %>%
   ggtitle("Values of states over time")
 
 # Plot range of values for each state
-vl[league != "NA"] %>% 
+vl[grepl("*L$", league)] %>% 
   ggplot(aes(x = state, y = value, color = league)) + 
   geom_boxplot() + 
   theme(axis.text.x = element_text(angle = 90)) +
@@ -204,7 +210,7 @@ We run four separate Wald Tests:
 3. Test if park_factor interaction betas = 0
 4. Test if FIP interaction betas = 0
 
-```{r,echo=F}
+```{r,echo=F, eval = F}
 #To-Do
 
 # Load in raw coefficients and stderrs from regressions
