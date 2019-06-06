@@ -210,18 +210,18 @@ pt = fread(paste0(export_folder, "player_table_league_pf_fip.csv"))
 batters = unique(pt$res_batter)
 
 # Create a table of Lagged BERs for each player/season
-lag_table = matrix(NA, nrow = nrow(pt), ncol = 7)
-j = 1
+lag_table = matrix(NA, nrow = nrow(pt), ncol = 11)
+r = 1
 for (b in batters) {
   # Take subset of given batter
   b.subset = pt[res_batter == b]
   # Need batter to have 4 or more seasons
   if (dim(b.subset)[1] >= 4) {
     for (i in 4:dim(b.subset)[1]) {
-      temp = c(b.subset$res_batter[i], b.subset$player_name[i],  
-               b.subset$season[i], b.subset[(i-3):i, ]$BER)
-      lag_table[j,] = temp
-      j = j + 1
+      lag_table[r,] = c(b.subset$res_batter[i], b.subset$player_name[i],  
+                        b.subset$season[i], 
+                        b.subset[(i-3):i,]$BER, b.subset[(i-3):i,]$RE24)
+      r = r + 1
     }
   
   }
@@ -230,25 +230,33 @@ for (b in batters) {
 # Put into a data.table and drop NA rows
 lag_table = lag_table %>% data.table() %>% drop_na() 
 colnames(lag_table) = c("res_batter", "player_name", "season",
-                        "BER", "BER_L1", "BER_L2", "BER_L3")
+                        "BER_L3", "BER_L2", "BER_L1", "BER",
+                        "RE24_L3", "RE24_L2", "RE24_L1", "RE24")
 
-lag_table[, c("season", "BER", "BER_L1", "BER_L2", "BER_L3")] =
-  lapply(lag_table[, c("season", "BER_L3", "BER_L2", "BER_L1", "BER")], 
+lag_table[, c("season", "BER", "BER_L1", "BER_L2", "BER_L3", 
+              "RE24", "RE24_L1", "RE24_L2", "RE24_L3")] =
+  lapply(lag_table[, c("season", "BER", "BER_L1", "BER_L2", "BER_L3",
+                       "RE24", "RE24_L1", "RE24_L2", "RE24_L3")], 
          as.numeric)
 
-
+# Create a res_batter_season variable
 lag_table$res_batter_season = paste0(lag_table$res_batter, "_", lag_table$season)
 
 # Regression
-lag_reg = lm(BER ~ BER_L1 + BER_L2 + BER_L3, data = lag_table)
+BER_lag_reg = lm(BER ~ BER_L1 + BER_L2 + BER_L3, data = lag_table)
+summary(BER_lag_reg)
 
-
+RE24_lag_reg = lm(RE24 ~ RE24_L1 + RE24_L2 + RE24_L3, data = lag_table)
+summary(RE24_lag_reg)
 
 
 
 
 
 ```
+
+It seems that maybe RE24 has more persistence than BER, but might just be a result of RE24 being a raw additive measure of value instead of normalized by plate appearance counts. We should look at RE24/PA persistence as a fairer comparison. 
+
 
 # Shrinkage
 
