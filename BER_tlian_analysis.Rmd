@@ -233,7 +233,7 @@ colnames(lag_table) = c("res_batter", "player_name", "season",
                         "BER", "BER_L1", "BER_L2", "BER_L3")
 
 lag_table[, c("season", "BER", "BER_L1", "BER_L2", "BER_L3")] =
-  lapply(lag_table[, c("season", "BER", "BER_L1", "BER_L2", "BER_L3")], 
+  lapply(lag_table[, c("season", "BER_L3", "BER_L2", "BER_L1", "BER")], 
          as.numeric)
 
 
