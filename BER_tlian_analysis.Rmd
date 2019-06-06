@@ -202,13 +202,70 @@ data.table(state = vl_combined[s == "base"]$base_state,
 We see many of the same characteristics of FIP interaction that we do in park factor interaction. The relationships between variance and mean of values, variance and values of base states, and amplifying/dampening effect also hold true with FIP. 
 
 
-## Wald Test
+# Persistence
+
+```{r}
+# Read in player BER table
+pt = fread(paste0(export_folder, "player_table_league_pf_fip.csv"))
+batters = unique(pt$res_batter)
+
+# Create a table of Lagged BERs for each player/season
+lag_table = matrix(NA, nrow = nrow(pt), ncol = 7)
+j = 1
+for (b in batters) {
+  # Take subset of given batter
+  b.subset = pt[res_batter == b]
+  # Need batter to have 4 or more seasons
+  if (dim(b.subset)[1] >= 4) {
+    for (i in 4:dim(b.subset)[1]) {
+      temp = c(b.subset$res_batter[i], b.subset$player_name[i],  
+               b.subset$season[i], b.subset[(i-3):i, ]$BER)
+      lag_table[j,] = temp
+      j = j + 1
+    }
+  
+  }
+}
+
+# Put into a data.table and drop NA rows
+lag_table = lag_table %>% data.table() %>% drop_na() 
+colnames(lag_table) = c("res_batter", "player_name", "season",
+                        "BER", "BER_L1", "BER_L2", "BER_L3")
+
+lag_table[, c("season", "BER", "BER_L1", "BER_L2", "BER_L3")] =
+  lapply(lag_table[, c("season", "BER", "BER_L1", "BER_L2", "BER_L3")], 
+         as.numeric)
+
+
+lag_table$res_batter_season = paste0(lag_table$res_batter, "_", lag_table$season)
+
+# Regression
+lag_reg = lm(BER ~ BER_L1 + BER_L2 + BER_L3, data = lag_table)
+
+
+
+
+
+
+
+```
+
+# Shrinkage
+
+# Wald Test
 
 We run four separate Wald Tests:
 1. Test if betas for base states = 0
 2. Test if league betas for states = 0
 3. Test if park_factor interaction betas = 0
 4. Test if FIP interaction betas = 0
+
+
+```{r}
+
+
+
+```
 
 ```{r,echo=F, eval = F}
 #To-Do
