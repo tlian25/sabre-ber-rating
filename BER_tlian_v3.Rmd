@@ -49,15 +49,17 @@ We write a for-loop covering only one year as it will be easily translatable acr
 ```{r, eval = T, message = F}
 # Lists to store values and player_tables
 vl_list = list()
+vl_shrink_list = list()
 pt_list = list()
+pt_shrink_list = list()
 coef_list = list()
+coef_shrink_list = list()
 covar_list = list()
-shrink_list = list()
 wald_list = list()
 
 
 # Year range
-years = 2016:2016
+years = 1977:2016
 for (y in years) {
   print(paste("Aggregating data for year:", as.character(y)))
   datalist = list()
@@ -79,8 +81,9 @@ for (y in years) {
   m = calculate_BER_value_function_league_pf_fip(dt)
   
   shrk = shrinkage(m$reg, m$covar.mat)
-  shrink_list[[y]] = shrk$vl.shrink %>% 
-    data.table(state = names(.), value = ., season = y)
+  coef_shrink_list[[y]] = shrk$coef.shrink %>% data.table(state = rownames(.), 
+                                                          .,
+                                                          season = y)
   
   w = data.table(shrk$wald)
   w$season = y
@@ -88,19 +91,22 @@ for (y in years) {
 
   # Calculate BER for each AB with current_year_dt and values
   BER_dt = calculate_BER_league_pf_fip(current_year_dt, m$vl)
-  
-  BER_shrink_dt = calculate_BER_value_function_league_pf_fip(current_year_dt, 
-                                                             shrk$vl.shrink)
+  BER_shrink_dt = calculate_BER_league_pf_fip(current_year_dt, shrk$vl.shrink)
   
   # Aggregate BER for players
   player_table = create_player_table(BER_dt)
-  
-  # Add values to list
   player_table$season = y
   pt_list[[y]] = player_table
+
+  player_table_shrink = create_player_table(BER_shrink_dt)
+  player_table_shrink$season = y
+  pt_shrink_list[[y]] = player_table_shrink
+
   
   # Add values to value_list
   vl_list[[y]] = m$vl %>% data.table(state = names(.), value = ., season = y)
+  vl_shrink_list[[y]] = shrk$vl.shrink %>% 
+    data.table(state = names(.), value = ., season = y)
   
   # Add coefficients and clustered se to list
   m$coef.se$season = y
@@ -112,36 +118,46 @@ for (y in years) {
   # Export CSVs
   print("Exporting BER_dt...")
   fwrite(BER_dt, paste0(export_folder, "BER_dt_", as.character(y), ".csv"))
+  fwrite(BER_shrink_dt, paste0(export_folder, "BER_shrink_dt_", as.character(y), ".csv"))
   print(paste0("Successfully exported all tables for year: ", as.character(y)))
+  
    
 }
+```
 
-
-# Export wald test results functions across all seasons
-wald.all = do.call(rbind, wald_list)
-fwrite(wald.all, paste0(export_folder, "wald_league_pf_fip.csv"))
-
-# Export shrinkage value functions across all seasons
-vl.shrink.all = do.call(rbind, shrink_list)
-fwrite(vl.shrink.all, paste0(export_folder, "values_shrink_league_pf_fip.csv"))
-
+## Aggregate and Export Values
+```{r}
 # Export value functions across all seasons
 vl.all = do.call(rbind, vl_list)
 fwrite(vl.all, paste0(export_folder, "values_league_pf_fip.csv"))
+# Shrunk value functions
+vl.shrink.all = do.call(rbind, shrink_list)
+fwrite(vl.shrink.all, paste0(export_folder, "values_shrink_league_pf_fip.csv"))
+
 
 # Export player BERs across all seasons
 pt.all = do.call(rbind, pt_list)
 fwrite(pt.all, paste0(export_folder, "player_table_league_pf_fip.csv"))
+# Shrunk player BERs
+pt.shrink.all = do.call(rbind, pt_shrink_list)
+fwrite(pt.shrink.all, paste0(export_folder, "player_table_shrink_league_pf_fip.csv"))
 
 # Export raw coefficients and clustered SEs
 coef.all = do.call(rbind, coef_list)
 fwrite(coef.all, paste0(export_folder, "raw_coef_se_league_pf_fip.csv"))
+# Shrunk raw coefficients
+coef.shrink.all = do.call(rbind, coef_shrink_list)
+fwrite(coef.shrink.all, paste0(export_folder, 
+                               "raw_coef_shrink_league_pf_fip.csv"))
 
 # Export clustered covariance matrix
 covar.all = do.call(rbind, covar_list)
 fwrite(covar.all, paste0(export_folder, "covar_league_pf_fip.csv"))
 
 
+# Export wald test results functions across all seasons
+wald.all = do.call(rbind, wald_list)
+fwrite(wald.all, paste0(export_folder, "wald_league_pf_fip.csv"))
 ```
 
 # Compare Value Functions Across Time
