@@ -6,7 +6,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-#options(scipen = 999)
+options(scipen = 999)
 require(data.table)
 require(tidyverse)
 require(devtools)
@@ -208,6 +208,8 @@ data.table(state = vl_combined[s == "base"]$base_state,
 We see many of the same characteristics of FIP interaction that we do in park factor interaction. The relationships between variance and mean of values, variance and values of base states, and amplifying/dampening effect also hold true with FIP. 
 
 
+
+
 # Persistence
 
 ```{r}
@@ -277,14 +279,16 @@ summary(pa_count_reg)
 
 ## Plots
 ```{r}
+
 pt %>% 
-  ggplot(aes(x = BER)) + geom_histogram(binwidth = 0.002)
+  ggplot(aes(x = BER)) + geom_histogram(aes(y = ..density..), binwidth = 0.002) + 
+  ggtitle("Distribution of BER (All players, all seasons, PA > 100)") +
+  stat_function(fun = dnorm, color = "red",
+                args = list(mean = mean(pt[PA_count > 100]$BER), 
+                            sd = sd(pt[PA_count > 100]$BER)))
 
-pt[PA_count > 100] %>% 
-  ggplot(aes(x = BER)) + geom_histogram(binwidth = 0.002)
 
-
-pt[PA_count > 100] %>%
+pt %>%
   ggplot(aes(x = BER, y = PA_count)) + 
   geom_point() +
   geom_smooth(method = "lm")
@@ -334,9 +338,13 @@ for (i in 1:(length(intervals)-1)) {
 }
 
 cur_fut_BER = data.table(cur_BER = int_range , fut_BER = avg_fut_per)
+cur_fut_BER$cur_BER = cur_fut_BER$cur_BER %>% factor(., levels = .)
 
 cur_fut_BER %>% 
-  ggplot(aes(x = cur_BER, y = fut_BER)) + geom_bar(stat = "identity")
+  ggplot(aes(x = cur_BER, y = fut_BER)) + geom_bar(stat = "identity") + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Future BER vs Current BER Range")
+  
 
 
 
@@ -344,54 +352,75 @@ cur_fut_BER %>%
 
 # Shrinkage
 
-# Wald Test
-
-We run four separate Wald Tests:
-1. Test if betas for base states = 0
-2. Test if league betas for states = 0
-3. Test if park_factor interaction betas = 0
-4. Test if FIP interaction betas = 0
-
-
+## Comparison of Shrinkage vs Unshrunk Values
 ```{r}
+vl = fread(paste0(export_folder, "values_league_pf_fip.csv"))
+vl = vl[!grepl("end*", state)]
 
+vl.s = fread(paste0(export_folder, "values_shrink_league_pf_fip.csv"))
+vl.s = vl.s[!grepl("end*", state)]
 
+data.table(state = vl$state, value = vl$value, value.s = vl.s$value, season = factor(vl$season)) %>%
+  filter(grepl("*L$", state)) %>%
+  filter(season == 2016) %>%
+  ggplot(aes(x = value, y = value.s, color = season)) + geom_point()
 
 ```
 
-```{r,echo=F, eval = T}
-#To-Do
+## Shrinkage player comparison
+```{r}
+# Regular players
+# Read in player BER table 
+pt = fread(paste0(export_folder, "player_table_league_pf_fip.csv"))
+# Filter by at least 100 PA
+pt = pt[PA_count > 100]
+batters = unique(pt$res_batter)
 
-# Year range
-years = 1977:1977
+# Create a weighted BER total for each season
+pt$weighted_sum_BER = pt$PA_count * pt$BER
+# Group by player
+pt.grouped = pt %>% group_by(res_batter, player_name) %>%
+  summarize(PA_count = sum(PA_count), BER = sum(weighted_sum_BER)/sum(PA_count), 
+            RE24 = sum(RE24))
+
+# Lifetime Highest BERs
+print("Lifetime Higest BERs (PA > 100)")
+print(head(pt.grouped %>% 
+             filter(PA_count > 500) %>%
+             arrange(desc(BER)), 50))
+
+
+
+# Shrunk players
+# Read in player BER table 
+pt.s = fread(paste0(export_folder, "player_table_shrink_league_pf_fip.csv"))
+# Filter by at least 100 PA
+pt.s = pt.s[PA_count > 100]
+batters = unique(pt.s$res_batter)
+
+# Create a weighted BER total for each season
+pt.s$weighted_sum_BER = pt.s$PA_count * pt.s$BER
+# Group by player
+pt.s.grouped = pt.s %>% group_by(res_batter, player_name) %>%
+  summarize(PA_count = sum(PA_count), BER = sum(weighted_sum_BER)/sum(PA_count), 
+            RE24 = sum(RE24))
+
+# Lifetime Highest BERs
+print("Lifetime Higest BERs (PA > 100)")
+print(head(pt.s.grouped %>% 
+             filter(PA_count > 500) %>%
+             arrange(desc(BER)), 50))
+```
+
+
+# Highest BER players for each season
+```{r}
+years = 2015:2016
 for (y in years) {
-  print(paste("Aggregating data for year:", as.character(y)))
-  datalist = list()
-  for (i in (y-2):(y+2)) {
-    if (i == y) {
-      current_year_dt = import_season_data(i)
-      datalist[[i]] = current_year_dt
-    }
-    else {
-      datalist[[i]] = import_season_data(i)
-    }
-
-  }
-  dt = do.call(rbind, datalist) # Aggregate data.table
-  
-  # Now we run the regression model with this data.table
-  # m$reg contains the full linear model
-  # m$reg_vl contains the list of values for each state
-  m = calculate_BER_value_function_league_pf_fip(dt)
-  
-  w = null.wald.test(m$reg, m$covar.mat)
-  print(w)
-  
-  s = shrinkage(m$reg, m$covar.mat)
-   
+  # Subset season, PA > 100
+  season = pt[season == y][PA_count > 100][order(BER, decreasing = T)]
+  print(paste0("Highest BER (PA > 100) in season ", as.character(y)))
+  print(head(season, 10))
 }
 
-        
-  
-  
 ```

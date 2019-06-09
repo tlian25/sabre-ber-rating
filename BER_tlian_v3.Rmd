@@ -8,13 +8,11 @@ knitr::opts_chunk$set(echo = TRUE)
 options(scipen = 999)
 library(data.table)
 library(tidyverse)
-library(gridExtra)
-library(multiwayvcov)
 
 
 # Source tool functions file
 source("BER_tool_functions.R")
-source("Wald Testing and Shrinkage/Shrinkage_4_Tests_Equivalency.R")
+source("Wald Testing and Shrinkage/Shrinkage_FINAL.R")
 
 # Make sure folder is correct and exists
 possible_folders = c("/Users/txl/TXL_R/Final Data/",
@@ -28,7 +26,8 @@ print(paste0("Folder name: ", folder_name))
 
 
 # Create export_folder if it does not already exist
-export_folder = "./BER_Export_Files/"
+#export_folder = "./BER_Export_Files/"
+export_folder = "./BER_Export_Files2/"
 if (!file.exists(export_folder)){
   print(paste0("Creating export folder: ", export_folder))
   dir.create(export_folder)
@@ -37,7 +36,7 @@ if (!file.exists(export_folder)){
 ```
 
 
-# BER Version 3
+# BER Version 3 
 
 We use the following methodology to calculate BERs for a given year.
 1. For year $Y$, aggregate all data in years $[Y-2, Y+2]$ to use in regression model. Calculate across time.
@@ -131,7 +130,7 @@ for (y in years) {
 vl.all = do.call(rbind, vl_list)
 fwrite(vl.all, paste0(export_folder, "values_league_pf_fip.csv"))
 # Shrunk value functions
-vl.shrink.all = do.call(rbind, shrink_list)
+vl.shrink.all = do.call(rbind, vl_shrink_list)
 fwrite(vl.shrink.all, paste0(export_folder, "values_shrink_league_pf_fip.csv"))
 
 
@@ -160,79 +159,8 @@ wald.all = do.call(rbind, wald_list)
 fwrite(wald.all, paste0(export_folder, "wald_league_pf_fip.csv"))
 ```
 
-# Compare Value Functions Across Time
-```{r}
-# Load from export folder
-vl = fread(paste0(export_folder, "values_league_pf_fip.csv"))
-vl$league = if_else(grepl("*NL", vl$state), "NL", "AL")
-vl$state_raw = str_replace(vl$state, ".L$", "")
-
-# States across years
-vl %>% 
-  ggplot(aes(x = season, y = value, group = state)) + 
-  geom_line(aes(color = state)) + 
-  ggtitle("Value of States across years")
-
-# NL States across years
-vl[grepl("*NL", state)] %>% 
-  ggplot(aes(x = season, y = value, group = state)) + 
-  geom_line(aes(color = state)) + 
-  ggtitle("Value of NL States across years")
-
-# AL States across years
-vl[grepl("*AL", state)] %>%
-  ggplot(aes(x = season, y = value, group = state)) + 
-  geom_line(aes(color = state)) + 
-  ggtitle("Value of AL States across years")
-
-# Plot range of states 
-
-vl %>%
-  ggplot(aes(x = state, y = value)) + geom_boxplot(aes(color = league)) + 
-  theme(axis.text.x = element_text(angle = 90)) +
-  ggtitle("League Model Coefficients (all factors)")
 
 
-
-
-
-```
-
-
-
-# Highest BER players for each season
-```{r}
-pt.all = fread(paste0(export_folder, "player_table_league_pf_fip.csv"))
-years = 2015:2016
-for (y in years) {
-  # Subset season, PA > 100
-  season = pt.all[Season == y][PA_count > 100][order(BER, decreasing = T)]
-  print(paste0("Highest BER (PA > 100) in season ", as.character(y)))
-  print(head(season, 10))
-}
-
-```
-
-# Player Lifetime BERs
-```{r}
-# Load Data
-pt.all = fread(paste0(export_folder, "player_table_league_pf_fip.csv"))
-# Create a weighted BER total for each season
-pt.all$weighted_sum_BER = pt.all$PA_count * pt.all$BER
-# Group by player
-pt.grouped = pt.all %>% group_by(res_batter, player_name) %>%
-  summarize(PA_count = sum(PA_count), BER = sum(weighted_sum_BER)/sum(PA_count), 
-            RE24 = sum(RE24))
-
-# Lifetime Highest BERs
-print("Lifetime Higest BERs (PA > 100)")
-print(head(pt.grouped %>% 
-             filter(PA_count > 500) %>%
-             arrange(desc(BER)), 50))
-
-
-
-```
 
 
 
