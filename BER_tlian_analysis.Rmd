@@ -6,12 +6,25 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-options(scipen = 999)
+#options(scipen = 999)
 require(data.table)
 require(tidyverse)
+require(devtools)
 
 # Source tool functions file
 source("BER_tool_functions.R")
+source("Wald Testing and Shrinkage/Shrinkage_4_Tests_Equivalency.R")
+
+# Make sure folder is correct and exists
+possible_folders = c("/Users/txl/TXL_R/Final Data/",
+                     "~/Final Data/",
+                     "C:/Users/TXL/Documents/SportsAnalyticsData/Final Data/")
+
+folder_name = ""
+for (f in possible_folders) {
+  if (dir.exists(f)) {folder_name = f}
+}
+print(paste0("Folder name: ", folder_name))
 
 # Export folder where outputs are located
 export_folder = "./BER_Export_Files/"
@@ -20,13 +33,6 @@ export_folder = "./BER_Export_Files/"
 ```
 
 # Explorations and Analysis of Value Functions
-
-To-Do:
-
-* Regress PA_count vs BER
-* Lag BER for persistence measure
-* Salary vs BER
-* 
 
 ## Values of States
 
@@ -207,10 +213,15 @@ We see many of the same characteristics of FIP interaction that we do in park fa
 ```{r}
 # Read in player BER table
 pt = fread(paste0(export_folder, "player_table_league_pf_fip.csv"))
+# Filter by at least 100 PA
+pt = pt[PA_count > 100]
 batters = unique(pt$res_batter)
 
+pt$RE24.PA = pt$RE24 / pt$PA_count
+
+
 # Create a table of Lagged BERs for each player/season
-lag_table = matrix(NA, nrow = nrow(pt), ncol = 11)
+lag_table = matrix(NA, nrow = nrow(pt), ncol = 15)
 r = 1
 for (b in batters) {
   # Take subset of given batter
@@ -220,7 +231,8 @@ for (b in batters) {
     for (i in 4:dim(b.subset)[1]) {
       lag_table[r,] = c(b.subset$res_batter[i], b.subset$player_name[i],  
                         b.subset$season[i], 
-                        b.subset[(i-3):i,]$BER, b.subset[(i-3):i,]$RE24)
+                        b.subset[(i-3):i,]$BER, b.subset[(i-3):i,]$RE24,
+                        b.subset[(i-3):i,]$RE24.PA)
       r = r + 1
     }
   
@@ -231,12 +243,15 @@ for (b in batters) {
 lag_table = lag_table %>% data.table() %>% drop_na() 
 colnames(lag_table) = c("res_batter", "player_name", "season",
                         "BER_L3", "BER_L2", "BER_L1", "BER",
-                        "RE24_L3", "RE24_L2", "RE24_L1", "RE24")
+                        "RE24_L3", "RE24_L2", "RE24_L1", "RE24",
+                        "RE24.PA_L3", "RE24.PA_L2", "RE24.PA_L1", "RE24.PA")
 
 lag_table[, c("season", "BER", "BER_L1", "BER_L2", "BER_L3", 
-              "RE24", "RE24_L1", "RE24_L2", "RE24_L3")] =
+              "RE24", "RE24_L1", "RE24_L2", "RE24_L3",
+               "RE24.PA_L3", "RE24.PA_L2", "RE24.PA_L1", "RE24.PA")] =
   lapply(lag_table[, c("season", "BER", "BER_L1", "BER_L2", "BER_L3",
-                       "RE24", "RE24_L1", "RE24_L2", "RE24_L3")], 
+                       "RE24", "RE24_L1", "RE24_L2", "RE24_L3",
+                        "RE24.PA_L3", "RE24.PA_L2", "RE24.PA_L1", "RE24.PA")], 
          as.numeric)
 
 # Create a res_batter_season variable
@@ -244,19 +259,88 @@ lag_table$res_batter_season = paste0(lag_table$res_batter, "_", lag_table$season
 
 # Regression
 BER_lag_reg = lm(BER ~ BER_L1 + BER_L2 + BER_L3, data = lag_table)
-summary(BER_lag_reg)
+summary(BER_lag_reg) 
 
 RE24_lag_reg = lm(RE24 ~ RE24_L1 + RE24_L2 + RE24_L3, data = lag_table)
 summary(RE24_lag_reg)
 
+RE24.PA_lag_reg = lm(RE24.PA ~ RE24.PA_L1 + RE24.PA_L2 + RE24.PA_L3, data = lag_table)
+summary(RE24.PA_lag_reg)
+
+# Regression of PA count vs BER
+# Do higher BER players tend to bat more?
+pa_count_reg = lm(PA_count ~ BER, data = pt)
+summary(pa_count_reg)
 
 
+```
 
+## Plots
+```{r}
+pt %>% 
+  ggplot(aes(x = BER)) + geom_histogram(binwidth = 0.002)
+
+pt[PA_count > 100] %>% 
+  ggplot(aes(x = BER)) + geom_histogram(binwidth = 0.002)
+
+
+pt[PA_count > 100] %>%
+  ggplot(aes(x = BER, y = PA_count)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+
+pt %>% 
+  ggplot(aes(x = RE24, y = PA_count)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
+
+pt %>%
+  ggplot(aes(x = RE24.PA, y = PA_count)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
 
 ```
 
 It seems that maybe RE24 has more persistence than BER, but might just be a result of RE24 being a raw additive measure of value instead of normalized by plate appearance counts. We should look at RE24/PA persistence as a fairer comparison. 
 
+Looking at RE24/PA vs BER, we compare a standardized measure with a standardized measure for a better comparison. Looking at this metric, we see that BER has much more persistence in measuring quality. We believe this reasons is that pure RE24 not only incorporated value created but also usage in the form of PA counts, which in itself is another signal of quality. 
+
+## Percentile tables
+
+```{r}
+percentiles = c(.01, .05, .10, .25, .50, .75, .90, .95, .99)
+
+p1 = quantile(pt$BER, percentiles) * 100
+p2 = quantile(pt[PA_count > 100]$BER, percentiles) * 100
+
+percent_dt = data.table(Percentile = names(p1), BER = p1, "BER(PA>100)" = p2)
+
+
+rbind(percent_dt, data.table(Percentile = c("Mean", "SD", "N"),
+           BER = c(mean(pt$BER), sd(pt$BER), length(pt$BER)),
+           "BER(PA>100)"= c(mean(pt[PA_count > 100]$BER), 
+                            sd(pt[PA_count > 100]$BER),
+                            length(pt[PA_count > 100]$BER))))
+
+intervals = c(-0.1, -0.05, -0.025, 0, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15)
+int_range = c()
+
+avg_fut_per = c()
+for (i in 1:(length(intervals)-1)) {
+  subset = lag_table[BER_L1 > intervals[i] & BER_L1 < intervals[i+1]]
+  avg_fut_per = c(avg_fut_per, mean(subset$BER))
+  int_range = c(int_range, paste0(as.character(intervals[i]), " : ", 
+                                  as.character(intervals[i+1])))
+}
+
+cur_fut_BER = data.table(cur_BER = int_range , fut_BER = avg_fut_per)
+
+cur_fut_BER %>% 
+  ggplot(aes(x = cur_BER, y = fut_BER)) + geom_bar(stat = "identity")
+
+
+
+```
 
 # Shrinkage
 
@@ -275,32 +359,39 @@ We run four separate Wald Tests:
 
 ```
 
-```{r,echo=F, eval = F}
+```{r,echo=F, eval = T}
 #To-Do
 
-# Load in raw coefficients and stderrs from regressions
-coef = fread(paste0(export_folder, "raw_coef_se_league_pf_fip.csv"))
+# Year range
+years = 1977:1977
+for (y in years) {
+  print(paste("Aggregating data for year:", as.character(y)))
+  datalist = list()
+  for (i in (y-2):(y+2)) {
+    if (i == y) {
+      current_year_dt = import_season_data(i)
+      datalist[[i]] = current_year_dt
+    }
+    else {
+      datalist[[i]] = import_season_data(i)
+    }
 
-# Load in covariance matrices
-covar = fread(paste0(export_folder, "covar_league_pf_fip.csv"))
+  }
+  dt = do.call(rbind, datalist) # Aggregate data.table
+  
+  # Now we run the regression model with this data.table
+  # m$reg contains the full linear model
+  # m$reg_vl contains the list of values for each state
+  m = calculate_BER_value_function_league_pf_fip(dt)
+  
+  w = null.wald.test(m$reg, m$covar.mat)
+  print(w)
+  
+  s = shrinkage(m$reg, m$covar.mat)
+   
+}
 
-# Run a loop for each year
-for (y in 1977:1977) {
-  coef_year = coef[season == y]
-  V = as.matrix(covar[season == y][, -c("season")])
-  rownames(V) = colnames(V)
-  B = coef_year[1:24, ]$coef
         
   
   
-}
-
-
-B <- clean.betas
-V <- clean.covar
-R <- matrix(c(0,0,0,0,0,1,1),1,7,byrow = T)
-r <- matrix(0,1,1)
-
-wald.stat <- t(R%*%B-r)%*%inv(R%*%V%*%t(R))%*%(R%*%B-r) #Calculating wald statistic
-wald.pvalue <- pchisq(wald.stat,1,lower.tail = FALSE) #Determining the p-value for the above wald statistic
 ```

@@ -14,6 +14,7 @@ library(multiwayvcov)
 
 # Source tool functions file
 source("BER_tool_functions.R")
+source("Wald Testing and Shrinkage/Shrinkage_4_Tests_Equivalency.R")
 
 # Make sure folder is correct and exists
 possible_folders = c("/Users/txl/TXL_R/Final Data/",
@@ -36,16 +37,6 @@ if (!file.exists(export_folder)){
 ```
 
 
-
-### NOTES/TO-DO:
-* Cluster on half-innings
-* Compare our measure vs other measures in predicting salary/persistence, etc
-* Incremental improve over RE24?
-* Controlled for factors (RE24 does not)
-* Standardization
-* (Park_factor-100) * 24states
-* FIP * 24states
-
 # BER Version 3
 
 We use the following methodology to calculate BERs for a given year.
@@ -61,9 +52,12 @@ vl_list = list()
 pt_list = list()
 coef_list = list()
 covar_list = list()
+shrink_list = list()
+wald_list = list()
+
 
 # Year range
-years = 1977:2016
+years = 2016:2016
 for (y in years) {
   print(paste("Aggregating data for year:", as.character(y)))
   datalist = list()
@@ -84,8 +78,19 @@ for (y in years) {
   # m$reg_vl contains the list of values for each state
   m = calculate_BER_value_function_league_pf_fip(dt)
   
+  shrk = shrinkage(m$reg, m$covar.mat)
+  shrink_list[[y]] = shrk$vl.shrink %>% 
+    data.table(state = names(.), value = ., season = y)
+  
+  w = data.table(shrk$wald)
+  w$season = y
+  wald_list[[y]] = w
+
   # Calculate BER for each AB with current_year_dt and values
   BER_dt = calculate_BER_league_pf_fip(current_year_dt, m$vl)
+  
+  BER_shrink_dt = calculate_BER_value_function_league_pf_fip(current_year_dt, 
+                                                             shrk$vl.shrink)
   
   # Aggregate BER for players
   player_table = create_player_table(BER_dt)
@@ -110,6 +115,15 @@ for (y in years) {
   print(paste0("Successfully exported all tables for year: ", as.character(y)))
    
 }
+
+
+# Export wald test results functions across all seasons
+wald.all = do.call(rbind, wald_list)
+fwrite(wald.all, paste0(export_folder, "wald_league_pf_fip.csv"))
+
+# Export shrinkage value functions across all seasons
+vl.shrink.all = do.call(rbind, shrink_list)
+fwrite(vl.shrink.all, paste0(export_folder, "values_shrink_league_pf_fip.csv"))
 
 # Export value functions across all seasons
 vl.all = do.call(rbind, vl_list)
