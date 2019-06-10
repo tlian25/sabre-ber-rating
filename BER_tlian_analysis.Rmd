@@ -28,6 +28,7 @@ print(paste0("Folder name: ", folder_name))
 
 # Export folder where outputs are located
 export_folder = "./BER_Export_Files/"
+export_folder2 = "./BER_Export_Files2/"
 
 
 ```
@@ -208,6 +209,45 @@ data.table(state = vl_combined[s == "base"]$base_state,
 We see many of the same characteristics of FIP interaction that we do in park factor interaction. The relationships between variance and mean of values, variance and values of base states, and amplifying/dampening effect also hold true with FIP. 
 
 
+# Clustered SE
+```{r}
+# Unshrunk
+vl = fread(paste0(export_folder, "raw_coef_se_league_pf_fip.csv"))
+# Remove end inning states as those are always 0
+vl = vl[!grepl("end*", state)]
+
+
+vl.grouped = vl %>% group_by(state) %>% 
+  summarize(coef = mean(coef),
+            se = mean(se),
+            se.clust = mean(se.clust)) %>%
+  data.table()
+
+
+vl.grouped[grepl("*]$", state)]
+vl.grouped$group = ""
+
+vl.grouped[grepl("]$", state)]$group = "base"
+vl.grouped[grepl("NL", state)]$group = "league"
+vl.grouped[grepl("FIP", state)]$group = "FIP"
+vl.grouped[grepl("park", state)]$group = "park"
+
+vl.grouped%>% 
+  ggplot(aes(x = se, y = se.clust, color = group)) + 
+  geom_point() + 
+  geom_text(aes(label = state)) +
+  geom_abline(slope = 1, intercept = 0) + 
+  ggtitle("Clustered SE vs Unclustered SE")
+
+
+
+
+
+
+
+```
+
+
 
 
 # Persistence
@@ -360,10 +400,25 @@ vl = vl[!grepl("end*", state)]
 vl.s = fread(paste0(export_folder, "values_shrink_league_pf_fip.csv"))
 vl.s = vl.s[!grepl("end*", state)]
 
+# Base states
 data.table(state = vl$state, value = vl$value, value.s = vl.s$value, season = factor(vl$season)) %>%
   filter(grepl("*L$", state)) %>%
-  filter(season == 2016) %>%
-  ggplot(aes(x = value, y = value.s, color = season)) + geom_point()
+  ggplot(aes(x = value, y = value.s, color = state)) + geom_point() +
+  ggtitle("Shrinkage Values for States")
+
+# Park Factor
+data.table(state = vl$state, value = vl$value, value.s = vl.s$value, season = factor(vl$season)) %>%
+  filter(grepl("*park_factor", state)) %>%
+  ggplot(aes(x = value, y = value.s, color = state)) + geom_point() +
+  ggtitle("Shrinkage Values for Park Factor Interaction")
+
+# FIP
+data.table(state = vl$state, value = vl$value, value.s = vl.s$value, season = factor(vl$season)) %>%
+  filter(grepl("*FIP", state)) %>%
+  ggplot(aes(x = value, y = value.s, color = state)) + geom_point() +
+  ggtitle("Shrinkage Values for FIP Interaction")
+
+
 
 ```
 
@@ -384,10 +439,10 @@ pt.grouped = pt %>% group_by(res_batter, player_name) %>%
             RE24 = sum(RE24))
 
 # Lifetime Highest BERs
-print("Lifetime Higest BERs (PA > 100)")
+print("Lifetime Highest BERs (PA > 100)")
 print(head(pt.grouped %>% 
              filter(PA_count > 500) %>%
-             arrange(desc(BER)), 50))
+             arrange(desc(BER)), 10))
 
 
 
@@ -409,8 +464,34 @@ pt.s.grouped = pt.s %>% group_by(res_batter, player_name) %>%
 print("Lifetime Higest BERs (PA > 100)")
 print(head(pt.s.grouped %>% 
              filter(PA_count > 500) %>%
-             arrange(desc(BER)), 50))
+             arrange(desc(BER)), 10))
+
+# Plot Shrunk BER vs BER
+data.table(player_name = pt.grouped$player_name,
+           BER = pt.grouped$BER, 
+           BER_shrunk = pt.s.grouped$BER) %>%
+  ggplot(aes(x = BER, y = BER_shrunk)) + 
+  geom_point() + 
+  geom_abline(slope=1, intercept=0, color = "red") + 
+  geom_smooth(method = "lm", color = "blue") + 
+  ggtitle("Shrunk BERs vs Standard BERs (all players, all seasons, PA > 100")
+
+# Plot Shrunk RE24 vs RE24
+data.table(player_name = pt.grouped$player_name,
+           RE24 = pt.grouped$RE24, 
+           RE24_shrunk = pt.s.grouped$RE24) %>%
+  ggplot(aes(x = RE24, y = RE24_shrunk)) + 
+  geom_point() + 
+  geom_abline(slope=1, intercept=0, color = "red") + 
+  geom_smooth(method = "lm", color = "blue") + 
+  ggtitle("Shrunk RE24s vs Standard RE24s (all players, all seasons, PA > 100") 
+
+
 ```
+
+
+
+
 
 
 # Highest BER players for each season
