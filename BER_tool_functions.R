@@ -34,7 +34,7 @@ import_season_data = function(year) {
   
   # Turn FIP into numeric
   # NOTE: We have some NA FIPs
-  # Cap fip at 16 and zero-mean
+  # Cap FIP at 16 and zero-mean
   dt$FIP = as.numeric(dt$FIP)
   dt[FIP > 16]$FIP = 16
   dt$FIP = dt$FIP - mean(dt$FIP)

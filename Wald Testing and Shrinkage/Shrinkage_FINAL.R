@@ -2,7 +2,7 @@
 # Wald Statistic/P-Value Function
 
 wald.func <- function(B,V,R,df){
-  wald.stat <- t(R%*%B)%*%inv(R%*%V%*%t(R))%*%(R%*%B)
+  wald.stat <- t(R%*%B)%*%solve(R%*%V%*%t(R))%*%(R%*%B)
   wald.pvalue <- pchisq(wald.stat,df,lower.tail = FALSE)
   w <- cbind(wald.stat,wald.pvalue)
   return(w)
